@@ -1,22 +1,44 @@
-Mitsuba — Physically Based Renderer
-===================================
+# About
+This repository holds a compilable version of the [Mitsuba Renderer](https://github.com/mitsuba-renderer/mitsuba). The original code and build scripts are somewhat outdated, and do not work quite well on today's machine.
 
-http://mitsuba-renderer.org/
+# Note
+Currently, only Linux system is supported.
 
-## About
+# How to Compile
+```shell
+# Install utilities
+sudo apt install git cmake ninja-build clang
 
-Mitsuba is a research-oriented rendering system in the style of PBRT, from which it derives much inspiration. It is written in portable C++, implements unbiased as well as biased techniques, and contains heavy optimizations targeted towards current CPU architectures. Mitsuba is extremely modular: it consists of a small set of core libraries and over 100 different plugins that implement functionality ranging from materials and light sources to complete rendering algorithms.
+# Install dependencies
+sudo apt install libxerces-c-dev libboost-all-dev libeigen3-dev libglewmx-dev libxxf86vm-dev libpng-dev libjpeg-dev libopenexr-dev libcollada-dom-dev libfftw3-dev qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools libqt5xmlpatterns5-dev libpython-all-dev python3 libpython3-all-dev
 
-In comparison to other open source renderers, Mitsuba places a strong emphasis on experimental rendering techniques, such as path-based formulations of Metropolis Light Transport and volumetric modeling approaches. Thus, it may be of genuine interest to those who would like to experiment with such techniques that haven't yet found their way into mainstream renderers, and it also provides a solid foundation for research in this domain.
+# Clone the repository
+git clone https://github.com/yysun997/mitsuba.git
 
-The renderer currently runs on Linux, MacOS X and Microsoft Windows and makes use of SSE2 optimizations on x86 and x86_64 platforms. So far, its main use has been as a testbed for algorithm development in computer graphics, but there are many other interesting applications.
+# Configure and compile (Configure warning should not happen, but compile warning is fine.)
+mkdir ./mitsuba/build/release
+cd ./mitsuba/build/release
+cmake -G Ninja -DCMAKE_CXX_COMPILER=clang -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Release ../..
+ninja
 
-Mitsuba comes with a command-line interface as well as a graphical frontend to interactively explore scenes. While navigating, a rough preview is shown that becomes increasingly accurate as soon as all movements are stopped. Once a viewpoint has been chosen, a wide range of rendering techniques can be used to generate images, and their parameters can be tuned from within the program.
+# Take your python version
+ls
 
-## Documentation
+# The command-line
+# ./mitsuba -h
 
-For compilation, usage, and a full plugin reference, please see the [official documentation](http://mitsuba-renderer.org/docs.html).
+# The GUI
+# ./mtsgui
 
-## Releases and scenes
+# The python bindings
+# python3
+# >>> import sys
+# >>> sys.path.append("./python${Python_VERSION}")
+# >>> import mitsuba
+# >>> from mitsuba.core import *
+# >>> vec = Vector(1, 2, 3)
+# >>> normalize(vec)
 
-Pre-built binaries, as well as example scenes, are available on the [Mitsuba website](http://mitsuba-renderer.org/download.html).
+# See official documentation for more details
+# https://www.mitsuba-renderer.org/releases/current/documentation.pdf
+```
