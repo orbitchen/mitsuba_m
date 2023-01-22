@@ -2,7 +2,7 @@
 This repository holds a compilable version of the [Mitsuba Renderer](https://github.com/mitsuba-renderer/mitsuba). The original code and build scripts are somewhat outdated, and do not work quite well on today's machine.
 
 # Note
-Currently, only Linux system is supported.
+Currently, only **Linux** system is supported. We have tested on Ubuntu **20.04** and **22.04**. Other situations will most likely require some adjustments to the dependencies and install a newer version of CMake. For example, on Ubuntu 18.04, the default cmake version is 3.10, which is incompatible with our scripts. The latest release can be downloaded from the [official website](https://cmake.org/download/). In addition, the boost-python library on Ubuntu 18.04 seems not compatible with python3. Therefore, a python2 install may be necessary in that case. And you'll also need to modify the CMakeLists.txt, since it searches for python3 by default.
 
 # How to Compile
 ```shell
@@ -10,7 +10,7 @@ Currently, only Linux system is supported.
 sudo apt install git cmake ninja-build clang
 
 # Install dependencies
-sudo apt install libxerces-c-dev libboost-all-dev libeigen3-dev libglewmx-dev libxxf86vm-dev libpng-dev libjpeg-dev libopenexr-dev libcollada-dom-dev libfftw3-dev qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools libqt5xmlpatterns5-dev libpython-all-dev python3 libpython3-all-dev
+sudo apt install libxerces-c-dev libboost-all-dev libeigen3-dev libomp-dev libopengl-dev libglewmx-dev libxxf86vm-dev libpng-dev libjpeg-dev libopenexr-dev libcollada-dom-dev libfftw3-dev qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools libqt5xmlpatterns5-dev python3 libpython3-all-dev
 
 # Clone the repository
 git clone https://github.com/yysun997/mitsuba.git

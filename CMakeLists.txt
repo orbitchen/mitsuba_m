@@ -35,8 +35,11 @@ link_libraries(Boost::system Boost::filesystem Boost::thread Boost::python)
 find_package(Eigen3 REQUIRED CONFIG)
 include_directories(${EIGEN3_INCLUDE_DIRS})
 
+find_package(OpenMP REQUIRED)
+
+set(OpenGL_GL_PREFERENCE LEGACY)
 find_package(OpenGL REQUIRED)
-link_libraries(${OPENGL_LIBRARIES})
+link_libraries(OpenGL::GL OpenGL::GLU)
 
 pkg_check_modules(GLEWMX REQUIRED glewmx)
 link_libraries(${GLEWMX_LIBRARIES})
