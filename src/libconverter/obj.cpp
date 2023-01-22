@@ -24,7 +24,7 @@
 #include <mitsuba/core/version.h>
 #include <mitsuba/render/scene.h>
 #include <boost/filesystem/fstream.hpp>
-#include "converter.h"
+#include <mitsuba/converter/converter.h>
 
 std::set<std::string> availableTextures;
 

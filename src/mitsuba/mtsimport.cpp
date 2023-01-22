@@ -32,7 +32,7 @@
 #endif
 #include <xercesc/parsers/SAXParser.hpp>
 #include <xercesc/dom/DOMException.hpp>
-#include "converter.h"
+#include <mitsuba/converter/converter.h>
 #include <mitsuba/hw/glrenderer.h>
 #include <mitsuba/core/plugin.h>
 #include <mitsuba/core/statistics.h>

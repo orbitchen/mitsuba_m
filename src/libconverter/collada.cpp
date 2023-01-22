@@ -55,7 +55,7 @@
 #define __stdcall
 #endif
 
-#include "converter.h"
+#include <mitsuba/converter/converter.h>
 
 typedef std::map<std::string, std::string> StringMap;
 typedef std::map<std::string, int> RefCountMap;

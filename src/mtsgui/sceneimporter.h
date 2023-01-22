@@ -22,7 +22,7 @@
 #include <QtGui/QtGui>
 #include <mitsuba/core/lock.h>
 #include <mitsuba/core/fresolver.h>
-#include "../converter/converter.h"
+#include <mitsuba/converter/converter.h>
 
 using namespace mitsuba;
 

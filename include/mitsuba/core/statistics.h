@@ -339,7 +339,10 @@ private:
 class MTS_EXPORT_CORE Statistics : public Object {
 public:
     /// Return the global stats collector instance
-    inline static Statistics *getInstance() { return m_instance; }
+    inline static Statistics *getInstance() {
+        static ref<Statistics> m_instance = new Statistics();
+        return m_instance;
+    }
 
     /// Register a counter with the statistics collector
     void registerCounter(const StatsCounter *ctr);
@@ -360,7 +363,7 @@ public:
     static void staticInitialization();
 
     /// Free the memory taken by staticInitialization()
-    static void staticShutdown();
+    static void staticShutdown() {}
 
     MTS_DECLARE_CLASS()
 protected:
@@ -377,7 +380,6 @@ private:
         }
     };
 
-    static ref<Statistics> m_instance;
     std::vector<const StatsCounter *> m_counters;
     std::vector<std::pair<std::string, std::string> > m_plugins;
     ref<Mutex> m_mutex;

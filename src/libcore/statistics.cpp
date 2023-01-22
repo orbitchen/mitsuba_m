@@ -112,14 +112,8 @@ bool StatsCounter::operator<(const StatsCounter &v) const {
     return getCategory() < v.getCategory();
 }
 
-ref<Statistics> Statistics::m_instance = new Statistics();
-
 void Statistics::staticInitialization() {
     SAssert(sizeof(CacheLineCounter) == 128);
-}
-
-void Statistics::staticShutdown() {
-    m_instance = NULL;
 }
 
 Statistics::Statistics() {

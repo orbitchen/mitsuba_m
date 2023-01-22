@@ -43,7 +43,7 @@
 
 XERCES_CPP_NAMESPACE_USE
 
-#include "converter.h"
+#include <mitsuba/converter/converter.h>
 
 class ImporterDOMErrorHandler : public DOMErrorHandler {
 public:

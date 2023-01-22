@@ -16,7 +16,7 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <mitsuba/core/fresolver.h>
+#include "mitsuba/core/fresolver.h"
 #include <set>
 
 using namespace mitsuba;

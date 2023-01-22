@@ -87,7 +87,7 @@ struct PerThreadData {
 /// List of all PerThreadData data structures (one for each thread)
 boost::unordered_set<PerThreadData *> ptdGlobal;
 /// Lock to protect ptdGlobal
-boost::mutex ptdGlobalLock;
+std::mutex ptdGlobalLock;
 
 #if defined(__WINDOWS__)
 __declspec(thread) PerThreadData *ptdLocal = NULL;
@@ -108,7 +108,7 @@ struct ThreadLocalBase::ThreadLocalPrivate {
     ~ThreadLocalPrivate() {
         /* The TLS object was destroyed. Walk through all threads
            and clean up where necessary */
-        boost::lock_guard<boost::mutex> guard(ptdGlobalLock);
+        std::lock_guard<std::mutex> guard(ptdGlobalLock);
 
         for (boost::unordered_set<PerThreadData *>::iterator it = ptdGlobal.begin();
                 it != ptdGlobal.end(); ++it) {
@@ -203,7 +203,7 @@ void destroyGlobalTLS() {
 
 /// A new thread was started -- set up TLS data structures
 void initializeLocalTLS() {
-    boost::lock_guard<boost::mutex> guard(ptdGlobalLock);
+    std::lock_guard<std::mutex> guard(ptdGlobalLock);
 #if defined(__OSX__)
     PerThreadData *ptd = (PerThreadData *) pthread_getspecific(ptdLocal);
     if (!ptd) {
@@ -221,7 +221,7 @@ void initializeLocalTLS() {
 
 /// A thread has died -- destroy any remaining TLS entries associated with it
 void destroyLocalTLS() {
-    boost::lock_guard<boost::mutex> guard(ptdGlobalLock);
+    std::lock_guard<std::mutex> guard(ptdGlobalLock);
 
 #if defined(__OSX__)
     PerThreadData *ptd = (PerThreadData *) pthread_getspecific(ptdLocal);
