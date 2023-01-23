@@ -1,5 +1,3 @@
-add_compile_definitions(MTS_BUILD_MODULE=MTS_MODULE_CORE)
-
 add_mts_library(mitsuba-core
   class.cpp object.cpp statistics.cpp thread.cpp brent.cpp
   logger.cpp appender.cpp formatter.cpp lock.cpp qmc.cpp
@@ -11,3 +9,6 @@ add_mts_library(mitsuba-core
   zstream.cpp shvector.cpp fresolver.cpp rfilter.cpp
   quad.cpp mmap.cpp chisquare.cpp warp.cpp vmf.cpp
   tls.cpp ssemath.cpp spline.cpp track.cpp)
+
+target_compile_definitions(mitsuba-core PRIVATE MTS_BUILD_MODULE=MTS_MODULE_CORE)
+target_link_libraries(mitsuba-core ${PNG_LIBRARIES} ${JPEG_LIBRARIES} ${FFTW_LIBRARIES})

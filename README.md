@@ -2,7 +2,11 @@
 This repository holds a compilable version of the [Mitsuba Renderer](https://github.com/mitsuba-renderer/mitsuba). The original code and build scripts are somewhat outdated, and do not work quite well on today's machine.
 
 # Note
-Currently, only **Linux** system is supported. We have tested on Ubuntu **20.04** and **22.04**. Other situations will most likely require some adjustments to the dependencies and install a newer version of CMake. For example, on Ubuntu 18.04, the default cmake version is 3.10, which is incompatible with our scripts. The latest release can be downloaded from the [official website](https://cmake.org/download/). In addition, the boost-python library on Ubuntu 18.04 seems not compatible with python3. Therefore, a python2 install may be necessary in that case. And you'll also need to modify the CMakeLists.txt, since it searches for python3 by default.
+**Only Linux** system is currently supported. 
+
+We have tested on Ubuntu **20.04** and **22.04**. Other distributions **equivalently new** may also be ok (e.g. Kali Linux 2022).
+
+However, older versions of Linux (e.g. Ubuntu 18.04) will take you lots of time to modify the dependencies and even CMake scripts.
 
 # How to Compile
 ```shell
@@ -33,7 +37,7 @@ ls
 # The python bindings
 # python3
 # >>> import sys
-# >>> sys.path.append("./python${Python_VERSION}")
+# >>> sys.path.insert(0, "./python${Python_VERSION}")
 # >>> import mitsuba
 # >>> from mitsuba.core import *
 # >>> vec = Vector(1, 2, 3)

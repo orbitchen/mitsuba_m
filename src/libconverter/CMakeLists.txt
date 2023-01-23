@@ -1,3 +1,6 @@
-add_compile_definitions(COLLADA_DOM_2_4)
-
-add_mts_library(mitsuba-converter SHARED collada.cpp obj.cpp converter.cpp)
+if(COLLADA_DOM_FOUND)
+  add_mts_library(mitsuba-converter SHARED collada.cpp obj.cpp converter.cpp)
+  target_compile_definitions(mitsuba-converter PRIVATE COLLADA_DOM_2_4)
+  target_include_directories(mitsuba-converter PRIVATE ${COLLADA_DOM_INCLUDE_DIRS})
+  target_link_libraries(mitsuba-converter ${COLLADA_DOM_LIBRARIES})
+endif()

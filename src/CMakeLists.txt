@@ -2,6 +2,11 @@
 function(add_mts_plugin)
   list(POP_FRONT ARGV PLUGIN_NAME)
   add_library(${PLUGIN_NAME} SHARED ${ARGV})
+  target_link_libraries(${PLUGIN_NAME}
+    mitsuba-bidir
+    mitsuba-core
+    mitsuba-hw
+    mitsuba-render)
   set_target_properties(${PLUGIN_NAME} PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/plugins
     PREFIX "")
@@ -21,29 +26,17 @@ function(add_mts_library)
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 endfunction()
 
-# Build Internal libraries dependent by other modules
+# Internal libraries dependent by other modules
 add_subdirectory(libbidir)
+add_subdirectory(libconverter)
 add_subdirectory(libcore)
 add_subdirectory(libhw)
 add_subdirectory(librender)
 
-link_libraries(
-  mitsuba-bidir
-  mitsuba-core
-  mitsuba-hw
-  mitsuba-render)
+# Python bindings
+add_subdirectory(libpython)
 
-if(COLLADA_DOM_FOUND)
-  add_subdirectory(libconverter)
-  link_libraries(mitsuba-converter)
-endif()
-
-# Build Python bindings if available
-if(Python_FOUND)
-  add_subdirectory(libpython)
-endif()
-
-# Build shipped plugins
+# Shipped plugins
 add_subdirectory(bsdfs)
 add_subdirectory(emitters)
 add_subdirectory(films)
@@ -60,8 +53,8 @@ add_subdirectory(textures)
 add_subdirectory(utils)
 add_subdirectory(volume)
 
-# Build command-line tools
+# Command-line tools
 add_subdirectory(mitsuba)
 
-# Build GUI
+# GUI
 add_subdirectory(mtsgui)

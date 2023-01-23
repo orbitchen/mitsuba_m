@@ -4,6 +4,11 @@ if(Qt5_FOUND)
   set(CMAKE_AUTOUIC ON)
   set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
+  if(${COLLADA_DOM_FOUND})
+    include_directories(${COLLADA_DOM_INCLUDE_DIRS})
+    link_libraries(${COLLADA_DOM_LIBRARIES})
+  endif()
+
   add_mts_executable(mtsgui
     # CPP Sources
     aboutdlg.cpp acknowledgmentdlg.cpp addserverdlg.cpp glwidget.cpp
@@ -20,4 +25,12 @@ if(Qt5_FOUND)
 
     # Qt5 Resources
     resources.qrc)
+
+  target_link_libraries(mtsgui
+    mitsuba-converter
+    mitsuba-core
+    mitsuba-hw
+    mitsuba-render
+    ${GL_LIBRARIES}
+    ${Qt5_LIBRARIES})
 endif()
