@@ -4,9 +4,6 @@ if(Python_FOUND)
   target_compile_options(mitsuba-python PRIVATE -fno-strict-aliasing)
   target_compile_definitions(mitsuba-python PRIVATE MTS_BUILD_MODULE=MTS_MODULE_PYTHON)
   target_include_directories(mitsuba-python PRIVATE ${Python_INCLUDE_DIRS})
-  target_link_directories(mitsuba-python PRIVATE
-    ${CMAKE_BINARY_DIR}
-    ${CMAKE_BINARY_DIR}/plugins)
   target_link_libraries(mitsuba-python
     mitsuba-bidir
     mitsuba-converter
