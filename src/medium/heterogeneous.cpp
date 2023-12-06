@@ -662,6 +662,11 @@ public:
         return success && mRec.pdfSuccess > 0;
     }
 
+    bool sampleDistanceMultipleScattering(const Ray &ray, MediumSamplingRecord &mRec, Sampler *sampler, Float sampleSurfP) const{
+        // TODO
+        return false;
+    }
+
     void eval(const Ray &ray, MediumSamplingRecord &mRec) const {
         if (m_method == ESimpsonQuadrature) {
             Float expVal = math::fastexp(-integrateDensity(ray));

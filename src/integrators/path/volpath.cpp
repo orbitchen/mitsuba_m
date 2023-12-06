@@ -73,6 +73,7 @@ static StatsCounter avgPathLength("Volumetric path tracer", "Average path length
  *      one of the photon mappers may be preferable.
  * }
  */
+
 class VolumetricPathTracer : public MonteCarloIntegrator {
 public:
     VolumetricPathTracer(const Properties &props) : MonteCarloIntegrator(props) { }
@@ -80,6 +81,22 @@ public:
     /// Unserialize from a binary data stream
     VolumetricPathTracer(Stream *stream, InstanceManager *manager)
      : MonteCarloIntegrator(stream, manager) { }
+
+    /// @brief sample on an arbitrary (positional) distribution. 
+    /// The distribution don't have to be inside medium.
+    /// @param mRec medium sample record. records t, sigmaA, sigmaS, time, medium, p and transmittance.
+    /// @param scene scene representation.
+    /// @return positional pdf.
+    Float sampleSpaceScatteringPoint(MediumSamplingRecord &mRec, const Scene* scene) const
+    {
+        // TODO
+    }
+
+    Float sampleSurfacePdf(MediumSamplingRecord &mRec, RadianceQueryRecord &rRec, const Scene *scene) const
+    {
+        // return mRec.pdfFailure;
+        return mRec.pdfFailure;
+    }
 
     Spectrum Li(const RayDifferential &r, RadianceQueryRecord &rRec) const {
         /* Some aliases and local variables */
@@ -94,23 +111,31 @@ public:
            intersection has already been provided). */
         rRec.rayIntersect(ray);
 
+        // ASSUME that the camera is not inside medium. nothing to do here
+
         Spectrum throughput(1.0f);
         bool scattered = false;
 
         while (rRec.depth <= m_maxDepth || m_maxDepth < 0) {
+
             /* ==================================================================== */
             /*                 Radiative Transfer Equation sampling                 */
             /* ==================================================================== */
-            if (rRec.medium && rRec.medium->sampleDistance(Ray(ray, 0, its.t), mRec, rRec.sampler)) {
+            
+            // if (rRec.medium && rRec.medium->sampleDistance(Ray(ray, 0, its.t), mRec, rRec.sampler)) 
+            if (rRec.medium) 
+            {
+                // OUT_DEBUG("medium intersection");
                 /* Sample the integral
-                   \int_x^y tau(x, x') [ \sigma_s \int_{S^2} \rho(\omega,\omega') L(x,\omega') d\omega' ] dx'
+                \int_x^y tau(x, x') [ \sigma_s \int_{S^2} \rho(\omega,\omega') L(x,\omega') d\omega' ] dx'
                 */
-                const PhaseFunction *phase = mRec.getPhaseFunction();
 
                 if (rRec.depth >= m_maxDepth && m_maxDepth != -1) // No more scattering events allowed
                     break;
 
-                throughput *= mRec.sigmaS * mRec.transmittance / mRec.pdfSuccess;
+                // throughput *= mRec.sigmaS * mRec.transmittance / mRec.pdfSuccess;
+
+                const PhaseFunction *phase = mRec.getPhaseFunction();
 
                 /* ==================================================================== */
                 /*                          Luminaire sampling                          */
@@ -135,7 +160,7 @@ public:
 
                         if (phaseVal != 0) {
                             /* Calculate prob. of having sampled that direction using
-                               phase function sampling */
+                            phase function sampling */
                             Float phasePdf = (emitter->isOnSurface() && dRec.measure == ESolidAngle)
                                     ? phase->pdf(pRec) : (Float) 0.0f;
 
@@ -155,21 +180,24 @@ public:
                 Float phaseVal = phase->sample(pRec, phasePdf, rRec.sampler);
                 if (phaseVal == 0)
                     break;
-                throughput *= phaseVal;
+                // phaseVal = phase / p
+                // throughput *= phaseVal;
 
                 /* Trace a ray in this direction */
+                Ray initialRay = ray;
                 ray = Ray(mRec.p, pRec.wo, ray.time);
                 ray.mint = 0;
 
                 Spectrum value(0.0f);
+                Intersection firstIts;
                 rayIntersectAndLookForEmitter(scene, rRec.sampler, rRec.medium,
-                    m_maxDepth - rRec.depth - 1, ray, its, dRec, value);
+                    m_maxDepth - rRec.depth - 1, ray, its, dRec, value, &firstIts);
 
                 /* If a luminaire was hit, estimate the local illumination and
-                   weight using the power heuristic */
+                weight using the power heuristic */
                 if (!value.isZero() && (rRec.type & RadianceQueryRecord::EDirectMediumRadiance)) {
                     const Float emitterPdf = scene->pdfEmitterDirect(dRec);
-                    Li += throughput * value * miWeight(phasePdf, emitterPdf);
+                    Li += throughput * phaseVal * value * miWeight(phasePdf, emitterPdf);
                 }
 
                 /* ==================================================================== */
@@ -180,13 +208,182 @@ public:
                 if (!(rRec.type & RadianceQueryRecord::EIndirectMediumRadiance))
                     break;
                 rRec.type = RadianceQueryRecord::ERadianceNoEmission;
-            } else {
+
+                // explicit surface/medium sampling
+                const Float estimateSurfaceP = sampleSurfacePdf(mRec, rRec, scene);
+                Float estimateMultipleScatteringP = 1.0f - estimateSurfaceP;
+                bool estimateSurface = rRec.sampler->next1D() < estimateSurfaceP;
+
+                if (estimateSurface){
+                    // estimate ONLY surface term
+                    // throughput *= (phase * transmittance) / (phasePdf * estimateSurfacePdf)
+                    // direction is sampled according to phase function
+                    Spectrum transmittance = rRec.medium->evalTransmittance(Ray(ray, 0, its.t), rRec.sampler);
+                    throughput *= phaseVal / estimateSurfaceP;
+                    
+
+                    if (!its.isValid()) {
+                        if ((rRec.type & RadianceQueryRecord::EEmittedRadiance) && (!m_hideEmitters || scattered)) {
+                            Spectrum value = throughput * scene->evalEnvironment(ray);
+                            if (rRec.medium)
+                                value *= rRec.medium->evalTransmittance(ray, rRec.sampler);
+                            Li += value;
+                        }
+                        break;
+                    }
+
+                    throughput *= transmittance;
+
+                    rRec.medium = its.getTargetMedium(ray.d);
+
+                }
+                else {
+                    
+                    // fixed point light source
+                    Point lightPosition = Point(-0.2, -0.8, 0.12);
+                    Spectrum lightIntensity = Spectrum(10.0);
+
+                    // estimate ONLY multiple scattering term using sampleDistanceMultipleScattering
+                    // throughput *= (phase * transmittance * sigmaS) 
+                    //             / (phasePdf * distancePdf * estimateMediumPdf)
+                    // phasePdf * distancePdf -> positionPdf * (1 / r^2)
+
+                    // =====================solution 1: sample inside medium=====================
+                    // if (!its.isValid()) break; // no problem
+                    // rRec.medium->sampleDistanceMultipleScattering(Ray(ray, 0, its.t), mRec, rRec.sampler);
+                    // mRec.pdfSuccess = mRec.pdfSuccess * estimateMultipleScatteringP;
+                    // throughput *= phaseVal * mRec.sigmaS * mRec.transmittance / mRec.pdfSuccess;
+
+                    // ====================solution 2: RIS=======================================
+
+                    // apply RIS
+                    // p^hat = phase (curr) * Tr (curr) * phase (next) * Tr (next estimated) * G * L_e
+                    
+                    const Float risSampleCount = 16;
+                    // MediumSamplingRecord selectedSample;
+                    Float weightSum = 0.0f;
+                    // Float selectedPdf;
+                    // Intersection selectedIts;
+                    Float selectedPdfHat = 0.0f;
+                    int sampleCount = 0;
+
+                    Float selectedPhaseEvalResult = 0.0f;
+                    Spectrum selectedTr;
+
+                    // fulfill RIS reservoir
+                    for(int i=0;i<risSampleCount;i++){
+                        Float phasePdfNew;
+                        PhaseFunctionSamplingRecord pRecNew(mRec, -initialRay.d);
+                        Float phaseValNew = phase->sample(pRecNew, phasePdfNew, rRec.sampler);
+
+                        Ray _ray = Ray(mRec.p, pRecNew.wo, initialRay.time);
+                        _ray.mint = 0.0f;
+
+                        Intersection _its;
+                        scene->rayIntersect(_ray, _its);
+
+                        if (!_its.isValid()) continue;
+
+                        MediumSamplingRecord _mRec;
+                        rRec.medium->sampleDistanceMultipleScattering(Ray(_ray, 0.0f, _its.t), _mRec, rRec.sampler);
+
+                        Spectrum sigmaT = _mRec.sigmaA + _mRec.sigmaS;
+
+                        Float pSample = phasePdfNew * _mRec.pdfSuccess;
+                        // pHat don't have to be normalized
+                        // Spectrum trCurr = (sigmaT * (-distance(_mRec.p, _ray.o))).exp();
+                        Spectrum trCurr = _mRec.transmittance;
+                        Spectrum trNext = (sigmaT * (-distance(_mRec.p, lightPosition))).exp();
+                        Float phaseCurr = 1.0f / (4.0f * M_PI); // TODO
+                        Float phaseNext = 1.0f / (4.0f * M_PI); // TODO
+                        Float geometryTerm = 1.0f / distanceSquared(_mRec.p, lightPosition);
+                        Float Le = lightIntensity.getLuminance();
+                        Float pHat = phaseCurr * std::max(trCurr.getLuminance(), 0.2f) * phaseNext * std::max(trNext.getLuminance(), 0.2f) * std::max(geometryTerm, 0.2f) * Le;
+                        
+                        if (pHat <= 1e-6) printf("invalid!\n");
+                        // Jacobi
+                        // pHat = pHat * distanceSquared(_mRec.p, _ray.o);
+                        // if (pHat == 0.0f) continue;
+
+                        Float weight = pHat / pSample;
+                        weightSum += weight;
+                        sampleCount++;
+
+                        // pick
+                        Float rand = rRec.sampler->next1D();
+                        Float pickP = weight / weightSum;
+
+                        if (rand < pickP)
+                        {
+                            mRec = _mRec;
+                            ray = _ray;
+                            its = _its;
+                            selectedPdfHat = pHat;
+                            selectedPhaseEvalResult = phaseValNew * phasePdfNew;
+                            selectedTr = trCurr;
+                        }
+                    }
+
+                    // update throughput
+                    // printf("%d\n", sampleCount == 0);
+                    Float RISWeight = (weightSum / sampleCount) / selectedPdfHat;
+
+                    throughput *= selectedPhaseEvalResult * selectedTr * mRec.sigmaS * RISWeight
+                                / estimateMultipleScatteringP;
+
+                    
+
+
+                   // ====================solution 3: sample another direction====================
+                //    Float phasePdfNew;
+                //    PhaseFunctionSamplingRecord pRecNew(mRec, -initialRay.d);
+                //    Float phaseVal = phase->sample(pRecNew, phasePdfNew, rRec.sampler);
+
+                //    ray = Ray(mRec.p, pRecNew.wo, initialRay.time);
+                //    ray.mint = 0.0f;
+
+                //    if (phaseVal == 0.0f) break;
+                //    scene->rayIntersect(ray, its);
+
+                //    if (!its.isValid()) break;
+
+                //    // sample distance
+                //    rRec.medium->sampleDistanceMultipleScattering(Ray(ray, 0.0f, its.t), mRec, rRec.sampler);
+
+                //    throughput *= phaseVal * mRec.sigmaS * mRec.transmittance / (mRec.pdfSuccess * estimateMultipleScatteringP);
+                }
+
+                // const Float estimateSurfaceP = 0.2f;
+                // auto insideMedium = rRec.medium->sampleDistanceMultipleScattering(Ray(ray, 0, its.t), mRec, rRec.sampler, estimateSurfaceP);
+                // // auto insideMedium = rRec.medium->sampleDistance(Ray(ray, 0, its.t), mRec, rRec.sampler);
+                // if (insideMedium) {
+                //     if (!its.isValid()) break;
+                //     throughput *= phaseVal * mRec.sigmaS * mRec.transmittance / mRec.pdfSuccess;
+                // }
+                // else {
+                //     if (!its.isValid()) {
+                //         if ((rRec.type & RadianceQueryRecord::EEmittedRadiance) && (!m_hideEmitters || scattered)) {
+                //             Spectrum value = throughput * scene->evalEnvironment(ray);
+                //             if (rRec.medium)
+                //                 value *= rRec.medium->evalTransmittance(ray, rRec.sampler);
+                //             Li += value;
+                //         }
+                //         break;
+                //     }
+                //     throughput *= phaseVal * mRec.transmittance / mRec.pdfFailure;
+                //     rRec.medium = its.getTargetMedium(ray.d);
+                // }
+
+            } 
+            else {
+                // OUT_DEBUG("surface intersection");
                 /* Sample
                     tau(x, y) (Surface integral). This happens with probability mRec.pdfFailure
                     Account for this and multiply by the proper per-color-channel transmittance.
                 */
-                if (rRec.medium)
-                    throughput *= mRec.transmittance / mRec.pdfFailure;
+                // if (rRec.medium){
+                //     throughput *= mRec.transmittance / mRec.pdfFailure;
+                // }
 
                 if (!its.isValid()) {
                     /* If no intersection could be found, possibly return
@@ -297,6 +494,29 @@ public:
                         : RadianceQueryRecord::ERadiance;
                     scene->rayIntersect(ray, its);
                     rRec.depth++;
+
+                    // OUT_DEBUG("null intersection");
+                    // corner case for null BSDF
+                    if (rRec.medium){
+                        auto insideMedium = rRec.medium->sampleDistance(Ray(ray, 0, its.t), mRec, rRec.sampler);
+                        if (insideMedium) {
+                            throughput *= mRec.sigmaS * mRec.transmittance / mRec.pdfSuccess;
+                        }
+                        else {
+                            if (!its.isValid()) {
+                                if ((rRec.type & RadianceQueryRecord::EEmittedRadiance) && (!m_hideEmitters || scattered)) {
+                                    Spectrum value = throughput * scene->evalEnvironment(ray);
+                                    if (rRec.medium)
+                                        value *= rRec.medium->evalTransmittance(ray, rRec.sampler);
+                                    Li += value;
+                                }
+                                break;
+                            }
+                            throughput *= mRec.transmittance / mRec.pdfFailure;
+                            rRec.medium = its.getTargetMedium(ray.d);
+                        }
+                    }
+
                     continue;
                 }
 
@@ -321,6 +541,27 @@ public:
                     break;
 
                 rRec.type = RadianceQueryRecord::ERadianceNoEmission;
+
+                // TODO: sampling distance white inside medium
+                if (rRec.medium){
+                    auto insideMedium = rRec.medium->sampleDistance(Ray(ray, 0, its.t), mRec, rRec.sampler);
+                    if (insideMedium) {
+                        throughput *= mRec.sigmaS * mRec.transmittance / mRec.pdfSuccess;
+                    }
+                    else {
+                        if (!its.isValid()) {
+                            if ((rRec.type & RadianceQueryRecord::EEmittedRadiance) && (!m_hideEmitters || scattered)) {
+                                Spectrum value = throughput * scene->evalEnvironment(ray);
+                                if (rRec.medium)
+                                    value *= rRec.medium->evalTransmittance(ray, rRec.sampler);
+                                Li += value;
+                            }
+                            break;
+                        }
+                        throughput *= mRec.transmittance / mRec.pdfFailure;
+                        rRec.medium = its.getTargetMedium(ray.d);
+                    }
+                }
             }
 
             if (rRec.depth++ >= m_rrDepth) {
@@ -352,7 +593,7 @@ public:
      * This function
      *
      * 1. Intersects 'ray' against the scene geometry and returns the
-     *    *first* intersection via the '_its' argument.
+     *    *first* intersection via the '_its' argument. (note: *last* intersection in fact)
      *
      * 2. It checks whether the intersected shape was an emitter, or if
      *    the ray intersects nothing and there is an environment emitter.
@@ -369,14 +610,19 @@ public:
      */
     void rayIntersectAndLookForEmitter(const Scene *scene, Sampler *sampler,
             const Medium *medium, int maxInteractions, Ray ray, Intersection &_its,
-            DirectSamplingRecord &dRec, Spectrum &value) const {
+            DirectSamplingRecord &dRec, Spectrum &value, Intersection *firstIts = nullptr) const {
         Intersection its2, *its = &_its;
         Spectrum transmittance(1.0f);
         bool surface = false;
         int interactions = 0;
 
+        bool isFirstIts = true;
+
         while (true) {
             surface = scene->rayIntersect(ray, *its);
+
+            if (firstIts != nullptr && isFirstIts) *firstIts = *its;
+            isFirstIts = false;
 
             if (medium)
                 transmittance *= medium->evalTransmittance(Ray(ray, 0, its->t), sampler);

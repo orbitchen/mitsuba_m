@@ -274,26 +274,18 @@ public:
 
     bool sampleDistance(const Ray &ray, MediumSamplingRecord &mRec,
             Sampler *sampler) const {
-        Float rand = sampler->next1D(), sampledDistance;
+        Float rand = sampler->next1D();
+        Float sampledDistance;
+
+        // selected sigma_t for a particular channel
         Float samplingDensity = m_samplingDensity;
 
-        if (rand < m_mediumSamplingWeight) {
-            rand /= m_mediumSamplingWeight;
-            if (m_strategy != EMaximum) {
-                /* Choose the sampling density to be used */
-                if (m_strategy == EBalance) {
-                    int channel = std::min((int) (sampler->next1D()
-                        * SPECTRUM_SAMPLES), SPECTRUM_SAMPLES-1);
-                    samplingDensity = m_sigmaT[channel];
-                }
-                sampledDistance = -math::fastlog(1-rand) / samplingDensity;
-            } else {
-                sampledDistance = m_maxExpDist->sample(1-rand, mRec.pdfSuccess);
-            }
-        } else {
-            /* Don't generate a medium interaction */
-            sampledDistance = std::numeric_limits<Float>::infinity();
-        }
+        // randomly selects a channel
+        int channel = std::min((int) (sampler->next1D()
+            * SPECTRUM_SAMPLES), SPECTRUM_SAMPLES-1);
+        samplingDensity = m_sigmaT[channel];
+        sampledDistance = -math::fastlog(1-rand) / samplingDensity;
+
         Float distSurf = ray.maxt - ray.mint;
         bool success = true;
 
@@ -314,36 +306,19 @@ public:
             success = false;
         }
 
-        switch (m_strategy) {
-            case EMaximum:
-                mRec.pdfFailure = 1-m_maxExpDist->cdf(sampledDistance);
-                break;
-
-            case EBalance:
-                mRec.pdfFailure = 0;
-                mRec.pdfSuccess = 0;
-                for (int i=0; i<SPECTRUM_SAMPLES; ++i) {
-                    Float tmp = math::fastexp(-m_sigmaT[i] * sampledDistance);
-                    mRec.pdfFailure += tmp;
-                    mRec.pdfSuccess += m_sigmaT[i] * tmp;
-                }
-                mRec.pdfFailure /= SPECTRUM_SAMPLES;
-                mRec.pdfSuccess /= SPECTRUM_SAMPLES;
-                break;
-
-            case ESingle:
-            case EManual:
-                mRec.pdfFailure = math::fastexp(-samplingDensity * sampledDistance);
-                mRec.pdfSuccess = samplingDensity * mRec.pdfFailure;
-                break;
-
-            default:
-                Log(EError, "Unknown sampling strategy!");
+        // fulfill pdfFailure & pdfSuccess
+        mRec.pdfFailure = 0;
+        mRec.pdfSuccess = 0;
+        for (int i=0; i<SPECTRUM_SAMPLES; ++i) {
+            Float tmp = math::fastexp(-m_sigmaT[i] * sampledDistance);
+            mRec.pdfFailure += tmp;
+            mRec.pdfSuccess += m_sigmaT[i] * tmp;
         }
+        mRec.pdfFailure /= SPECTRUM_SAMPLES;
+        mRec.pdfSuccess /= SPECTRUM_SAMPLES;
 
         mRec.transmittance = (m_sigmaT * (-sampledDistance)).exp();
-        mRec.pdfSuccessRev = mRec.pdfSuccess = mRec.pdfSuccess * m_mediumSamplingWeight;
-        mRec.pdfFailure = m_mediumSamplingWeight * mRec.pdfFailure + (1-m_mediumSamplingWeight);
+        mRec.pdfSuccessRev = mRec.pdfSuccess;
         mRec.medium = this;
         if (mRec.transmittance.max() < 1e-20)
             mRec.transmittance = Spectrum(0.0f);
@@ -351,6 +326,88 @@ public:
         return success;
     }
 
+    bool sampleDistanceMultipleScattering(const Ray &ray, MediumSamplingRecord &mRec, Sampler *sampler, Float sampleSurfP) const{
+        // TODO importance sampling
+        // Float sampleMediumP = 1.0f - sampleSurfP;
+        // Float rand = sampler->next1D();
+        // Float rand2 = sampler->next1D();
+        // Float distSurf = ray.maxt - ray.mint;
+        // Float sampledDistance;
+        // bool success;
+
+        // if (rand < sampleMediumP){
+        //     // rand = rand / sampleMediumP;
+        //     sampledDistance = distSurf * rand2;
+
+        //     mRec.t = sampledDistance + ray.mint;
+        //     mRec.sigmaA = m_sigmaA;
+        //     mRec.sigmaS = m_sigmaS;
+        //     mRec.time = ray.time;
+        //     mRec.medium = this;
+        //     mRec.p = ray(mRec.t);
+
+        //     success = true;
+
+        //     if (mRec.p == ray.o)
+        //         success = false;
+        // }
+        // else {
+        //     sampledDistance = distSurf;
+        //     success = false;
+        // }
+
+        // if (success)
+        // {
+        //     mRec.pdfSuccess = sampleMediumP / distSurf;
+        // }
+        // else
+        // {
+        //     mRec.pdfFailure = sampleSurfP;
+        // }
+
+        // mRec.transmittance = (m_sigmaT * (-sampledDistance)).exp();
+        // // mRec.pdfSuccess = 1.0f / distSurf;
+        // // mRec.pdfFailure = (ray.maxt - sampledDistance) / distSurf;
+        // mRec.pdfSuccessRev = mRec.pdfSuccess;
+
+        // if (mRec.transmittance.max() < 1e-20)
+        //     mRec.transmittance = Spectrum(0.0f);
+
+        // return success;
+
+        // Float rand = sampler->next1D();
+        Float rand2 = sampler->next1D();
+        Float distSurf = ray.maxt - ray.mint;
+        Float sampledDistance;
+
+            // rand = rand / sampleMediumP;
+        sampledDistance = distSurf * rand2;
+
+        mRec.t = sampledDistance + ray.mint;
+        mRec.sigmaA = m_sigmaA;
+        mRec.sigmaS = m_sigmaS;
+        mRec.time = ray.time;
+        mRec.medium = this;
+        mRec.p = ray(mRec.t);
+
+        mRec.pdfSuccess = 1.0f / distSurf;
+
+        int channel = std::min((int) (sampler->next1D()
+            * SPECTRUM_SAMPLES), SPECTRUM_SAMPLES-1);
+        Float samplingDensity = m_sigmaT[channel];
+        mRec.pdfFailure = math::fastexp(-m_sigmaT[channel] * distSurf);
+
+        mRec.transmittance = (m_sigmaT * (-sampledDistance)).exp();
+        // mRec.pdfSuccess = 1.0f / distSurf;
+        // mRec.pdfFailure = (ray.maxt - sampledDistance) / distSurf;
+        mRec.pdfSuccessRev = mRec.pdfSuccess;
+
+        if (mRec.transmittance.max() < 1e-20)
+            mRec.transmittance = Spectrum(0.0f);
+
+        return true;
+    }
+    
     void eval(const Ray &ray, MediumSamplingRecord &mRec) const {
         Float distance = ray.maxt - ray.mint;
         switch (m_strategy) {
