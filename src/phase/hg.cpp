@@ -109,6 +109,11 @@ public:
         return INV_FOURPI * (1 - m_g*m_g) / (temp * std::sqrt(temp));
     }
 
+    Float eval(const Vector& wi, const Vector& wo) const {
+        Float temp = 1.0f + m_g*m_g + 2.0f * m_g * dot(wi, wo);
+        return INV_FOURPI * (1 - m_g*m_g) / (temp * std::sqrt(temp));
+    }
+
     Float getMeanCosine() const {
         return m_g;
     }

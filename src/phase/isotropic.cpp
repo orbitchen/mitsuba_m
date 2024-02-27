@@ -77,6 +77,10 @@ public:
         return warp::squareToUniformSpherePdf();
     }
 
+    Float eval(const Vector& wi, const Vector& wo) const {
+        return 0.0f;
+    }
+
     Float getMeanCosine() const {
         return 0.0f;
     }

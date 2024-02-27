@@ -125,6 +125,9 @@ public:
                 / m_fiberDistr.sigmaT(Frame::cosTheta(wi));
     }
 
+    Float eval(const Vector& wi, const Vector& wo) const {
+        return 0.0f;
+    }
     inline Float sample(PhaseFunctionSamplingRecord &pRec, Sampler *sampler) const {
         if (pRec.mRec.orientation.isZero()) {
             /* What to do when the local orientation is undefined */

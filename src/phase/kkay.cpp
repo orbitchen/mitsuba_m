@@ -117,6 +117,10 @@ public:
             * m_normalization * m_ks + m_kd / (4*M_PI);
     }
 
+    Float eval(const Vector& wi, const Vector& wo) const {
+        return 0.0f;
+    }
+
     std::string toString() const {
         return "KajiyaKayPhaseFunction[]";
     }

@@ -289,7 +289,7 @@ public:
      */
     Spectrum evalTransmittance(const Point &p1, bool p1OnSurface,
         const Point &p2, bool p2OnSurface, Float time, const Medium *medium,
-        int &interactions, Sampler *sampler = NULL) const;
+        int &interactions, Sampler *sampler = NULL, Intersection* firstIts = nullptr) const;
 
     //! @}
     // =============================================================

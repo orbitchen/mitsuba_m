@@ -125,6 +125,10 @@ public:
         return result;
     }
 
+    Float eval(const Vector& wi, const Vector& wo) const {
+        return 0.0f;
+    }
+
     Float pdf(const PhaseFunctionSamplingRecord &pRec) const {
         Float result = 0.0f;
 

@@ -90,6 +90,10 @@ public:
         return (3.0f/(16.0f*M_PI)) * (1+mu*mu);
     }
 
+    Float eval(const Vector& wi, const Vector& wo) const {
+        return 0.0f;
+    }
+
     std::string toString() const {
         std::ostringstream oss;
         oss << "RayleighPhaseFunction[]";

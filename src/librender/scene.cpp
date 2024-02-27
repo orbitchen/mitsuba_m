@@ -617,7 +617,7 @@ std::string Scene::toString() const {
 static StatsCounter mediumInconsistencies("General", "Detected medium inconsistencies");
 
 Spectrum Scene::evalTransmittance(const Point &p1, bool p1OnSurface, const Point &p2, bool p2OnSurface,
-        Float time, const Medium *medium, int &interactions, Sampler *sampler) const {
+        Float time, const Medium *medium, int &interactions, Sampler *sampler, Intersection* firstIts) const {
     Vector d = p2 - p1;
     Float remaining = d.length();
     d /= remaining;
@@ -629,9 +629,16 @@ Spectrum Scene::evalTransmittance(const Point &p1, bool p1OnSurface, const Point
     int maxInteractions = interactions;
     interactions = 0;
 
+    bool recordFirstIts = false;
+
     while (remaining > 0) {
         Normal n;
         bool surface = rayIntersect(ray, its.t, its.shape, its.geoFrame.n, its.uv);
+
+        if (!recordFirstIts && firstIts != nullptr){
+            *firstIts = its;
+            recordFirstIts = true;
+        }
 
         if (surface && (interactions == maxInteractions ||
             !(its.getBSDF()->getType() & BSDF::ENull))) {

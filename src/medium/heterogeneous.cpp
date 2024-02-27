@@ -667,6 +667,15 @@ public:
         return false;
     }
 
+    Float pdfDistanceMultipleScattering(MediumSamplingRecord &mRec) const {
+        return 0.0f;
+    }
+
+    bool sampleDistanceAngular(const Ray &ray, MediumSamplingRecord &mRec, Sampler *sampler, const Point& lightPosition) const{
+        // TODO
+        return false;
+    }
+
     void eval(const Ray &ray, MediumSamplingRecord &mRec) const {
         if (m_method == ESimpsonQuadrature) {
             Float expVal = math::fastexp(-integrateDensity(ray));

@@ -1,6 +1,8 @@
 add_mts_plugin(ao direct/ao.cpp)
 add_mts_plugin(direct direct/direct.cpp)
 add_mts_plugin(path path/path.cpp)
+add_mts_plugin(volpath_nnee path/volpath_nnee.cpp)
+add_mts_plugin(volpath_equiangular path/volpath_equiangular.cpp)
 add_mts_plugin(volpath path/volpath.cpp)
 add_mts_plugin(volpath_simple path/volpath_simple.cpp)
 add_mts_plugin(ptracer ptracer/ptracer.cpp ptracer/ptracer_proc.cpp)
