@@ -132,6 +132,8 @@ public:
             Point scatteringPoint;
             Float scatteringPdf; // measured by d(omega) * d(distance)
 
+            Ray ray; // original sample ray. could be used by equiangular
+
             Spectrum di; // direct illumination. i.e., Tr * Le * G for point light source
         };
 
@@ -254,12 +256,13 @@ public:
                     return INV_FOURPI * (1 - m_g*m_g) / (temp * std::sqrt(temp));
                 };
 
-                std::vector<PhaseFunctionSamplingRecord> pRecordArray;
-                std::vector<Intersection> mItsArray;
-                std::vector<Float> mSolidAnglePdfArray;
-                std::vector<MediumSamplingRecord> mRecordArray;
-                std::vector<Intersection> diItsArray;
-                std::vector<Spectrum> diArray;
+                std::vector<PhaseFunctionSamplingRecord> pRecordArray; // direction sample record
+                std::vector<Ray> rayRecordArray; // point & direction from origin point -> sample point
+                std::vector<Intersection> mItsArray; // intersection record
+                std::vector<Float> mSolidAnglePdfArray; // direction pdf record
+                std::vector<MediumSamplingRecord> mRecordArray; // point sample record
+                std::vector<Intersection> diItsArray; // direct illumination intersection (at the surface of medium) record
+                std::vector<Spectrum> diArray; // direct illumination record (L_e * G * Tr)
 
                 // printf("NNEE begin\n");
 
@@ -276,6 +279,7 @@ public:
                     /* Trace a ray in this direction */
                     Ray initialRay = ray;
                     ray = Ray(mRec.p, pRec.wo, ray.time);
+                    rayRecordArray.push_back(ray);
                     ray.mint = 0;
 
                     Spectrum value(0.0f);
@@ -286,7 +290,7 @@ public:
 
                     /* If a luminaire was hit, estimate the local illumination and
                     weight using the power heuristic */
-                    // NO contributions here ...
+                    // NO contributions here -> Assume point light source
                     // if (!value.isZero() && (rRec.type & RadianceQueryRecord::EDirectMediumRadiance)) {
                     //     const Float emitterPdf = scene->pdfEmitterDirect(dRec);
                     //     Li += throughput * phaseVal * value * miWeight(phasePdf, emitterPdf);
@@ -312,6 +316,7 @@ public:
 
                     Ray initialRay = ray;
                     ray = Ray(mRec.p, pRecNew.wo, ray.time);
+                    rayRecordArray.push_back(ray);
                     ray.mint = 0;
 
                     Spectrum value(0.0f);
@@ -358,7 +363,7 @@ public:
                 };
                 
                 auto reuseMisPdf = [newPhaseFunctionG, newPhasePdfBiVec, medium, scatteringJacobi] 
-                (const scatteringPointNNEE& sample, const Point& scatteringPoint, const Point& currentSamplePoint) -> Float
+                (const scatteringPointNNEE& sample, const Point& scatteringPoint, const Point& currentSamplePoint, const Ray& ray) -> Float
                 {
                     Vector sampleDir = normalize(scatteringPoint - sample.sampleCentre);
                     Float sampleDistance = distance(scatteringPoint, sample.sampleCentre);
@@ -366,7 +371,7 @@ public:
 
                     MediumSamplingRecord temp;
                     temp.t = sampleDistance;
-                    Float distancePdf = medium->pdfDistanceMultipleScattering(temp);
+                    Float distancePdf = medium->pdfDistanceAngular(temp, ray, lightPosition);
                     Float J = scatteringJacobi(sample.sampleCentre, scatteringPoint, currentSamplePoint);
 
                     return phasePdf * distancePdf * J;
@@ -383,15 +388,20 @@ public:
                     if(selectedScatteringPoint.size() >= 6) break; // pick at most 6 samples
                 }
 
-                // fulfill info & calculate current contributions
+                // fulfill info & calculate current (2 scattering point) contributions
                 for (int i=0;i< NNEESampleCount; i++){
 
                     // sample multiple distances
                     MediumSamplingRecord mRecNext;
-                    rRec.medium->sampleDistanceMultipleScattering(
+                    // rRec.medium->sampleDistanceMultipleScattering(
+                    //     Ray(Ray(mRec.p, pRecordArray[i].wo, ray.time), 0, mItsArray[i].t), 
+                    //     mRecNext, 
+                    //     rRec.sampler);
+                    rRec.medium->sampleDistanceAngular(
                         Ray(Ray(mRec.p, pRecordArray[i].wo, ray.time), 0, mItsArray[i].t), 
                         mRecNext, 
-                        rRec.sampler);
+                        rRec.sampler,
+                        lightPosition);
 
                     mRecordArray.push_back(mRecNext);
 
@@ -405,11 +415,11 @@ public:
                     pdfs.push_back(mRec.getPhaseFunction()->eval(pRecordArray[i]));
                     pdfs.push_back(newPhasePdf(-towardsLight, pRecordArray[i]));
 
-                    pdfs[0]*=mRec.medium->pdfDistanceMultipleScattering(mRecNext);
-                    pdfs[1]*=mRec.medium->pdfDistanceMultipleScattering(mRecNext);
+                    pdfs[0]*=mRec.medium->pdfDistanceAngular(mRecNext,rayRecordArray[i], lightPosition);
+                    pdfs[1]*=mRec.medium->pdfDistanceAngular(mRecNext,rayRecordArray[i], lightPosition);
 
                     for(auto& item: selectedScatteringPoint){
-                        pdfs.push_back(reuseMisPdf(item, mRecNext.p, mRec.p));
+                        pdfs.push_back(reuseMisPdf(item, mRecNext.p, mRec.p, rayRecordArray[i]));
                     }
 
                     Float misWeight = multipleMisWeight(pdfs, pdfs[i]);
@@ -442,7 +452,7 @@ public:
                     // printf("all done\n");
                 }
 
-                // calculate reused contributions
+                // calculate reused (indefinite scattering point) contributions
                 int selectedScatteringPointCount = selectedScatteringPoint.size();
                 for(int si = 0; si < selectedScatteringPointCount; si++){
 
@@ -460,12 +470,12 @@ public:
 
                     MediumSamplingRecord temp;
                     temp.t = scatterDistance;
-                    pdfs[0]*=mRec.medium->pdfDistanceMultipleScattering(temp);
-                    pdfs[1]*=mRec.medium->pdfDistanceMultipleScattering(temp);
+                    pdfs[0]*=mRec.medium->pdfDistanceAngular(temp,item.ray, lightPosition);
+                    pdfs[1]*=mRec.medium->pdfDistanceAngular(temp,item.ray, lightPosition);
                     
 
                     for(auto& ss: selectedScatteringPoint){
-                        pdfs.push_back(reuseMisPdf(ss, item.scatteringPoint, mRec.p));
+                        pdfs.push_back(reuseMisPdf(ss, item.scatteringPoint, mRec.p, item.ray));
                     }
 
                     Float misWeight = multipleMisWeight(pdfs, pdfs[2+si]);
@@ -482,9 +492,10 @@ public:
                     newScattering.sampleCentre = mRec.p;
                     newScattering.PhaseAxis = -towardsLight;
                     newScattering.sampleG = newPhaseFunctionG;
-                    newScattering.scatteringPdf = mSolidAnglePdfArray[1] * medium->pdfDistanceMultipleScattering(mRecordArray[1]);
+                    newScattering.scatteringPdf = mSolidAnglePdfArray[1] * mRecordArray[1].pdfSuccess;
                     newScattering.scatteringPoint = mRecordArray[1].p;
                     newScattering.di = diArray[1];
+                    newScattering.ray = rayRecordArray[1];
                     previousScatter.push_back(newScattering);
                 }
 

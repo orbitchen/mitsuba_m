@@ -461,7 +461,45 @@ public:
 
         return success;
     }
-    
+
+    Float pdfDistanceAngular(MediumSamplingRecord &mRec, const Ray &ray, const Point& lightPosition)
+    {
+        Point sampleBegin = ray.o + ray.d * ray.mint;
+        // assure that ray.maxt is valid
+        Point sampleEnd = ray.o + ray.d * 99999.0f;
+
+        Float D; // distance from lightPosition to line
+        Float thetaBeginRad; // angle of sampleBegin
+        Float thetaEndRad; // angle of sampleEnd
+        // Float rand = sampler->next1D();
+        Float sampledDistance = mRec.t - ray.mint;
+        Float deltaDistance;
+
+        // obtain D
+        {
+            auto lineVec = ray.d;
+            auto beginToLightVec = lightPosition - sampleBegin;
+            Float cosLineLight = dot(lineVec, beginToLightVec) / (beginToLightVec.length() * lineVec.length());
+
+            D = std::abs(beginToLightVec.length() * sin(acos(cosLineLight)));
+            thetaBeginRad = (M_PI / 2.0f - acos(cosLineLight)) * -1.0f;
+
+            deltaDistance = (beginToLightVec.length() * cosLineLight);
+        }
+
+        // obtain two angle
+        {
+            auto lineVec = -ray.d;
+            auto endToLightVec = lightPosition - sampleEnd;
+            Float cosLineLight = dot(lineVec, endToLightVec) / (endToLightVec.length() * lineVec.length());
+            // if (cosLineLight > 0.0f) thetaEndRad = (M_PI / 2.0f - acos(cosLineLight)) * -1.0f;
+            // else thetaEndRad = (M_PI / 2.0f - acos(cosLineLight));
+            thetaEndRad = (M_PI / 2.0f - acos(cosLineLight));
+        }
+
+        return D / (1e-7 + (thetaEndRad - thetaBeginRad) * (D * D + sampledDistance * sampledDistance));
+    }
+
     void eval(const Ray &ray, MediumSamplingRecord &mRec) const {
         Float distance = ray.maxt - ray.mint;
         switch (m_strategy) {

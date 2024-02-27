@@ -125,6 +125,8 @@ public:
     virtual Float pdfDistanceMultipleScattering(MediumSamplingRecord &mRec) const = 0;
 
     virtual bool sampleDistanceAngular(const Ray &ray, MediumSamplingRecord &mRec, Sampler *sampler, const Point& lightPosition) const = 0;
+   
+    virtual Float pdfDistanceAngular(MediumSamplingRecord &mRec, const Ray &ray, const Point& lightPosition) const = 0;
     /**
      * \brief Compute the 1D density of sampling distance \a ray.maxt
      * along the ray using the sampling strategy implemented by

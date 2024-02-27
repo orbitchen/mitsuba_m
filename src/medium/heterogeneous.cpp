@@ -676,6 +676,12 @@ public:
         return false;
     }
 
+    Float pdfDistanceAngular(MediumSamplingRecord &mRec, const Ray &ray, const Point& lightPosition)
+    {
+        // TODO
+        return 0.0f;
+    } 
+
     void eval(const Ray &ray, MediumSamplingRecord &mRec) const {
         if (m_method == ESimpsonQuadrature) {
             Float expVal = math::fastexp(-integrateDensity(ray));
