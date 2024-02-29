@@ -24,7 +24,7 @@ MTS_NAMESPACE_BEGIN
 // const Point lightPosition = Point(-0.2, -0.8, 0.12);
 // const Spectrum lightIntensity = Spectrum(20.0);
 const Point lightPosition = Point(20, 20, 20);
-const Spectrum lightIntensity = Spectrum(800.0);
+const Spectrum lightIntensity = Spectrum(1500.0);
 
 static StatsCounter avgPathLength("Volumetric path tracer", "Average path length", EAverage);
 
@@ -419,9 +419,9 @@ public:
                     pdfs[0]*=mRec.medium->pdfDistanceMultipleScattering(mRecNext);
                     pdfs[1]*=mRec.medium->pdfDistanceMultipleScattering(mRecNext);
 
-                    for(auto& item: selectedScatteringPoint){
-                        pdfs.push_back(reuseMisPdf(item, mRecNext.p, mRec.p, rayRecordArray[i]));
-                    }
+                    // for(auto& item: selectedScatteringPoint){
+                    //     pdfs.push_back(reuseMisPdf(item, mRecNext.p, mRec.p, rayRecordArray[i]));
+                    // }
 
                     Float misWeight = multipleMisWeight(pdfs, pdfs[i]);
 
@@ -454,37 +454,37 @@ public:
                 }
 
                 // calculate reused (indefinite scattering point) contributions
-                int selectedScatteringPointCount = selectedScatteringPoint.size();
-                for(int si = 0; si < selectedScatteringPointCount; si++){
+                // int selectedScatteringPointCount = selectedScatteringPoint.size();
+                // for(int si = 0; si < selectedScatteringPointCount; si++){
 
-                    auto& item = selectedScatteringPoint[si];
-                    Vector scatterDir = normalize(item.scatteringPoint - mRec.p);
-                    Float scatterDistance = distance(item.scatteringPoint, mRec.p);
+                //     auto& item = selectedScatteringPoint[si];
+                //     Vector scatterDir = normalize(item.scatteringPoint - mRec.p);
+                //     Float scatterDistance = distance(item.scatteringPoint, mRec.p);
 
-                    std::vector<Float> pdfs;
+                //     std::vector<Float> pdfs;
 
-                    Float phaseValue = mRec.getPhaseFunction()->eval(-ray.d, scatterDir);
-                    Spectrum tr = medium->evalTransmittance(Ray(ray, 0.0f, scatterDistance));
+                //     Float phaseValue = mRec.getPhaseFunction()->eval(-ray.d, scatterDir);
+                //     Spectrum tr = medium->evalTransmittance(Ray(ray, 0.0f, scatterDistance));
 
-                    pdfs.push_back(phaseValue);
-                    pdfs.push_back(newPhasePdfBiVec(-towardsLight, scatterDir));
+                //     pdfs.push_back(phaseValue);
+                //     pdfs.push_back(newPhasePdfBiVec(-towardsLight, scatterDir));
 
-                    MediumSamplingRecord temp;
-                    temp.t = scatterDistance;
-                    pdfs[0]*=mRec.medium->pdfDistanceMultipleScattering(temp);
-                    pdfs[1]*=mRec.medium->pdfDistanceMultipleScattering(temp);
+                //     MediumSamplingRecord temp;
+                //     temp.t = scatterDistance;
+                //     pdfs[0]*=mRec.medium->pdfDistanceMultipleScattering(temp);
+                //     pdfs[1]*=mRec.medium->pdfDistanceMultipleScattering(temp);
                     
 
-                    for(auto& ss: selectedScatteringPoint){
-                        pdfs.push_back(reuseMisPdf(ss, item.scatteringPoint, mRec.p, item.ray));
-                    }
+                //     for(auto& ss: selectedScatteringPoint){
+                //         pdfs.push_back(reuseMisPdf(ss, item.scatteringPoint, mRec.p, item.ray));
+                //     }
 
-                    Float misWeight = multipleMisWeight(pdfs, pdfs[2+si]);
+                //     Float misWeight = multipleMisWeight(pdfs, pdfs[2+si]);
 
-                    Float phase2 = mRec.getPhaseFunction()->eval(-scatterDir, normalize(lightPosition - item.scatteringPoint));
+                //     Float phase2 = mRec.getPhaseFunction()->eval(-scatterDir, normalize(lightPosition - item.scatteringPoint));
                     
-                    Li += phaseValue * tr * phase2 * item.di * misWeight / pdfs[2+si];                
-                }
+                //     Li += phaseValue * tr * phase2 * item.di * misWeight / pdfs[2+si];                
+                // }
 
                 // add current NNEE sample to list
                 if (mRecordArray[1].p != mRec.p)
@@ -559,7 +559,7 @@ public:
                     // rRec.medium->sampleDistanceMultipleScattering(Ray(ray, 0, its.t), mRec, rRec.sampler);
                     // printf("new mRec position: %f, %f, %f\n", mRec.p.x, mRec.p.y, mRec.p.z);
                     ray = Ray(mRec.p, pRecordArray[0].wo, ray.time);
-                    throughput *= phaseVal * mRec.sigmaS * mRec.transmittance / (phasePdf * mRec.pdfSuccess * estimateMultipleScatteringP);
+                    throughput *= phaseVal * mRec.sigmaS * mRec.transmittance / (phasePdf * mRec.pdfSuccess);
 
                     // ====================solution 2: RIS=======================================
                     // apply RIS
