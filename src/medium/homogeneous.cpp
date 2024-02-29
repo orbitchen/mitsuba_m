@@ -462,7 +462,7 @@ public:
         return success;
     }
 
-    Float pdfDistanceAngular(MediumSamplingRecord &mRec, const Ray &ray, const Point& lightPosition)
+    Float pdfDistanceAngular(MediumSamplingRecord &mRec, const Ray &ray, const Point& lightPosition) const
     {
         Point sampleBegin = ray.o + ray.d * ray.mint;
         // assure that ray.maxt is valid

@@ -676,7 +676,7 @@ public:
         return false;
     }
 
-    Float pdfDistanceAngular(MediumSamplingRecord &mRec, const Ray &ray, const Point& lightPosition)
+    Float pdfDistanceAngular(MediumSamplingRecord &mRec, const Ray &ray, const Point& lightPosition) const
     {
         // TODO
         return 0.0f;

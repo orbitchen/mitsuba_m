@@ -79,12 +79,12 @@ static StatsCounter avgPathLength("Volumetric path tracer", "Average path length
  * }
  */
 
-class VolumetricPathTracerNNEE : public MonteCarloIntegrator {
+class VolumetricPathTracerNNEETest : public MonteCarloIntegrator {
 public:
-    VolumetricPathTracerNNEE(const Properties &props) : MonteCarloIntegrator(props) { }
+    VolumetricPathTracerNNEETest(const Properties &props) : MonteCarloIntegrator(props) { }
 
     /// Unserialize from a binary data stream
-    VolumetricPathTracerNNEE(Stream *stream, InstanceManager *manager)
+    VolumetricPathTracerNNEETest(Stream *stream, InstanceManager *manager)
      : MonteCarloIntegrator(stream, manager) { }
 
     /// @brief sample on an arbitrary (positional) distribution. 
@@ -195,6 +195,7 @@ public:
 
                                 /* Weight using the power heuristic */
                                 const Float weight = miWeight(dRec.pdf, phasePdf);
+                                // printf("initial di: %f\n", value.getLuminance());
                                 Li += throughput * value * phaseVal * weight;
                             }
                         }
@@ -310,29 +311,7 @@ public:
                 Vector towardsLight = normalize(lightPosition - mRec.p);
 
                 // sample heuristic phase function
-                {
-                    PhaseFunctionSamplingRecord pRecNew(mRec, -ray.d);
-                    Float phaseVal = newPhaseSample(-towardsLight,pRecNew, rRec.sampler);
-
-                    Intersection itsNew;
-
-                    Ray initialRay = ray;
-                    ray = Ray(mRec.p, pRecNew.wo, ray.time);
-                    rayRecordArray.push_back(ray);
-                    ray.mint = 0;
-
-                    Spectrum value(0.0f);
-                    Intersection firstIts;
-                    rayIntersectAndLookForEmitter(scene, rRec.sampler, rRec.medium,
-                        m_maxDepth - rRec.depth - 1, ray, itsNew, dRec, value, &firstIts);
-
-                    ray = initialRay;
-
-                    pRecordArray.push_back(pRecNew);
-                    mItsArray.push_back(firstIts);
-                    mSolidAnglePdfArray.push_back(phaseVal);
-                }
-
+                
                 // printf("sample heuristic phase function done\n");
 
                 // ==============================
@@ -353,8 +332,7 @@ public:
                     // di includes transmittance
                     int inter = 4;
                     diItsArray.emplace_back(Intersection());
-                    Spectrum tr = scene->evalTransmittance(mRec.p, false, lightPosition, false, 0.0f, m, inter, sampler, &diItsArray[diItsArray.size()-1]);
-
+                    Spectrum tr = scene->evalTransmittance(mRec.p, true, lightPosition, true, 0.0f, m, inter, sampler, &diItsArray[diItsArray.size()-1]);
                     return tr * lightIntensity * (1.0f / distanceSquared(mRec.p, lightPosition));
                 };
 
@@ -378,20 +356,9 @@ public:
 
                     return phasePdf * distancePdf * J;
                 };
-                int NNEESampleCount = 2;
-
-                // select previous NNEE samples
-                std::vector<scatteringPointNNEE> selectedScatteringPoint;
-                for(auto& item: previousScatter){
-                    if (medium->evalTransmittance(Ray(ray, 0.0f, distance(item.scatteringPoint, mRec.p))).max() > scatterTrMin) {
-                        selectedScatteringPoint.push_back(item);
-                    }
-
-                    if(selectedScatteringPoint.size() >= 6) break; // pick at most 6 samples
-                }
 
                 // fulfill info & calculate current (2 scattering point) contributions
-                for (int i=0;i< NNEESampleCount; i++){
+                for (int i=0;i< 1; i++){
 
                     // sample multiple distances
                     MediumSamplingRecord mRecNext;
@@ -399,10 +366,12 @@ public:
                     //     Ray(Ray(mRec.p, pRecordArray[i].wo, ray.time), 0, mItsArray[i].t), 
                     //     mRecNext, 
                     //     rRec.sampler);
-                    rRec.medium->sampleDistanceMultipleScattering(
+                    bool result = rRec.medium->sampleDistanceMultipleScattering(
                         Ray(Ray(mRec.p, pRecordArray[i].wo, ray.time), 0, mItsArray[i].t), 
                         mRecNext, 
                         rRec.sampler);
+
+                    if(!result) return Li;
 
                     mRecordArray.push_back(mRecNext);
 
@@ -410,99 +379,23 @@ public:
                     Spectrum di = calculateDi(mRecNext, mRec.medium, rRec.sampler);
                     diArray.push_back(di);
 
-                    // mix samples using MIS
-                    std::vector<Float> pdfs;
-
-                    pdfs.push_back(mRec.getPhaseFunction()->eval(pRecordArray[i]));
-                    pdfs.push_back(newPhasePdf(-towardsLight, pRecordArray[i]));
-
-                    pdfs[0]*=mRec.medium->pdfDistanceMultipleScattering(mRecNext);
-                    pdfs[1]*=mRec.medium->pdfDistanceMultipleScattering(mRecNext);
-
-                    for(auto& item: selectedScatteringPoint){
-                        pdfs.push_back(reuseMisPdf(item, mRecNext.p, mRec.p, rayRecordArray[i]));
-                    }
-
-                    Float misWeight = multipleMisWeight(pdfs, pdfs[i]);
-
                     Float phase2 = mRec.getPhaseFunction()->eval(-pRecordArray[i].wo, normalize(lightPosition - mRecNext.p));
                     // thp * phase1 * tr1 * phase2 * tr2 * Le * mis / (phase 1 pdf * distance 1 pdf)
                     // phase1 / phase 1 pdf == 1.0f
                     // di == tr2 * Le
-                    Spectrum contribution = throughput * mRec.sigmaS * 1.0f * mRecNext.transmittance * phase2 * di * misWeight / (mRecNext.pdfSuccess);
+
+                    // Spectrum contribution = throughput * 1.0f * mRecNext.transmittance * phase2 * di * misWeight / (mRecNext.pdfSuccess);
+                    Spectrum contribution = throughput * mRec.sigmaS * 1.0f * mRecNext.transmittance * phase2 * di / (mRecNext.pdfSuccess);
                     Li += contribution;
 
-                    if(contribution.isNaN()) 
-                    {
-                        // printf("find NaN!\n");
-                        // printf("pdfs: %f, %f, %f\n",pdfs[0],pdfs[1], mSolidAnglePdfArray[i] * mRecNext.pdfSuccess);
-                        // printf("record: %f, %f\n",mSolidAnglePdfArray[i], mRecNext.pdfSuccess);
-                        // if (i==0){
-                        //     printf("origin phase pdf / mSolidAnglePdfArray: %f, %f\n",mRec.getPhaseFunction()->eval(pRecordArray[i]), mSolidAnglePdfArray[i]);
-
-                        // }
-                        // if (i==1){
-                        //     printf("new phase pdf / mSolidAnglePdfArray : %f, %f\n", newPhasePdf(-towardsLight, pRecordArray[i]), mSolidAnglePdfArray[i]);
-                        // }
-
-                        // printf("max distance: %f\n", mItsArray[i].t);
-                        // printf("mRec position: %f, %f, %f\n", mRec.p.x, mRec.p.y, mRec.p.z);
-                        // printf("distance pdf / mis distance pdf : %f, %f\n", mRecNext.pdfSuccess, mRec.medium->pdfDistanceMultipleScattering(mRecNext));
-                    }
+                    // printf("contribution: %f\n", contribution.getLuminance());
+                    // printf("tr: %f\n", mRecNext.transmittance.getLuminance());
+                    // printf("di: %f\n",di.getLuminance());
+                    // printf("phase2: %f\n", phase2);
                     
                     // printf("all done\n");
                 }
 
-                // calculate reused (indefinite scattering point) contributions
-                int selectedScatteringPointCount = selectedScatteringPoint.size();
-                for(int si = 0; si < selectedScatteringPointCount; si++){
-
-                    auto& item = selectedScatteringPoint[si];
-                    Vector scatterDir = normalize(item.scatteringPoint - mRec.p);
-                    Float scatterDistance = distance(item.scatteringPoint, mRec.p);
-
-                    std::vector<Float> pdfs;
-
-                    Float phaseValue = mRec.getPhaseFunction()->eval(-ray.d, scatterDir);
-                    Spectrum tr = medium->evalTransmittance(Ray(ray, 0.0f, scatterDistance));
-
-                    pdfs.push_back(phaseValue);
-                    pdfs.push_back(newPhasePdfBiVec(-towardsLight, scatterDir));
-
-                    MediumSamplingRecord temp;
-                    temp.t = scatterDistance;
-                    pdfs[0]*=mRec.medium->pdfDistanceMultipleScattering(temp);
-                    pdfs[1]*=mRec.medium->pdfDistanceMultipleScattering(temp);
-                    
-
-                    for(auto& ss: selectedScatteringPoint){
-                        pdfs.push_back(reuseMisPdf(ss, item.scatteringPoint, mRec.p, item.ray));
-                    }
-
-                    Float misWeight = multipleMisWeight(pdfs, pdfs[2+si]);
-
-                    Float phase2 = mRec.getPhaseFunction()->eval(-scatterDir, normalize(lightPosition - item.scatteringPoint));
-                    
-                    Li += phaseValue * tr * phase2 * item.di * misWeight / pdfs[2+si];                
-                }
-
-                // add current NNEE sample to list
-                if (mRecordArray[1].p != mRec.p)
-                {
-                    scatteringPointNNEE newScattering;
-                    newScattering.sampleCentre = mRec.p;
-                    newScattering.PhaseAxis = -towardsLight;
-                    newScattering.sampleG = newPhaseFunctionG;
-                    newScattering.scatteringPdf = mSolidAnglePdfArray[1] * mRecordArray[1].pdfSuccess;
-                    newScattering.scatteringPoint = mRecordArray[1].p;
-                    newScattering.di = diArray[1];
-                    newScattering.ray = rayRecordArray[1];
-                    previousScatter.push_back(newScattering);
-                }
-
-                // printf("for end\n");
-                // reset intersection & record
-                // TODO: resample
                 mRec = mRecordArray[0];
                 Float phasePdf = mSolidAnglePdfArray[0];
                 Float phaseVal = mSolidAnglePdfArray[0];
@@ -555,126 +448,10 @@ public:
 
                     // =====================solution 1: sample inside medium=====================
                     if (!its.isValid()) break; // no problem
-                    // rRec.medium->sampleDistanceAngular(Ray(ray, 0, its.t), mRec, rRec.sampler, lightPosition);
-                    // rRec.medium->sampleDistanceMultipleScattering(Ray(ray, 0, its.t), mRec, rRec.sampler);
-                    // printf("new mRec position: %f, %f, %f\n", mRec.p.x, mRec.p.y, mRec.p.z);
                     ray = Ray(mRec.p, pRecordArray[0].wo, ray.time);
                     throughput *= phaseVal * mRec.sigmaS * mRec.transmittance / (phasePdf * mRec.pdfSuccess * estimateMultipleScatteringP);
 
-                    // ====================solution 2: RIS=======================================
-                    // apply RIS
-                    // p^hat = phase (curr) * Tr (curr) * phase (next) * Tr (next estimated) * G * L_e
-                    // const Float risSampleCount = 8;
-                    // // MediumSamplingRecord selectedSample;
-                    // Float weightSum = 0.0f;
-                    // // Float selectedPdf;
-                    // // Intersection selectedIts;
-                    // Float selectedPdfHat = 0.0f;
-                    // int sampleCount = 0;
-                    // Float selectedPhaseEvalResult = 0.0f;
-                    // Spectrum selectedTr;
-                    // // fulfill RIS reservoir
-                    // for(int i=0;i<risSampleCount;i++){
-                    //     Float phasePdfNew;
-                    //     PhaseFunctionSamplingRecord pRecNew(mRec, -initialRay.d);
-                    //     Float phaseValNew = phase->sample(pRecNew, phasePdfNew, rRec.sampler);
-                    //     Ray _ray = Ray(mRec.p, pRecNew.wo, initialRay.time);
-                    //     _ray.mint = 0.0f;
-                    //     Intersection _its;
-                    //     scene->rayIntersect(_ray, _its);
-                    //     if (!_its.isValid()) continue;
-                    //     MediumSamplingRecord _mRec;
-                    //     rRec.medium->sampleDistanceMultipleScattering(Ray(_ray, 0.0f, _its.t), _mRec, rRec.sampler);
-                    //     Spectrum sigmaT = _mRec.sigmaA + _mRec.sigmaS;
-                    //     Float pSample = phasePdfNew * _mRec.pdfSuccess;
-                    //     // pHat don't have to be normalized
-                    //     // Spectrum trCurr = (sigmaT * (-distance(_mRec.p, _ray.o))).exp();
-                    //     Spectrum trCurr = _mRec.transmittance;
-                    //     Spectrum trNext = (sigmaT * (-distance(_mRec.p, lightPosition))).exp();
-                    //     // Float phaseCurr = 1.0f / (4.0f * M_PI); // TODO
-                    //     // Float phaseNext = 1.0f / (4.0f * M_PI); // TODO
-                    //     Float phaseCurr = 1.0f; // TODO
-                    //     Float phaseNext = 1.0f; // TODO
-                    //     Float geometryTerm = 1.0f / distanceSquared(_mRec.p, lightPosition);
-                    //     Float Le = lightIntensity.getLuminance();
-                    //     Float scale = 20;
-                    //     // Float pHat = 1e-7 + scale * phaseCurr * scale * (trCurr.getLuminance()) * phaseNext * scale * (trNext.getLuminance()) * scale * (geometryTerm) * Le;
-                    //     // Float pHat = 1.0f;
-                    //     Float pHat = pSample;
-                    //     // printf("%f\n", pHat);
-                    //     // Jacobi
-                    //     // pHat = pHat * distanceSquared(_mRec.p, _ray.o);
-                    //     // if (pHat == 0.0f) continue;
-                    //     Float weight = pHat / pSample;
-                    //     weightSum += weight;
-                    //     sampleCount++;
-                    //     // pick
-                    //     Float rand = rRec.sampler->next1D();
-                    //     Float pickP = weight / weightSum;
-                    //     if (rand < pickP)
-                    //     {
-                    //         // printf("picked!\n");
-                    //         mRec = _mRec;
-                    //         ray = _ray;
-                    //         its = _its;
-                    //         selectedPdfHat = pHat;
-                    //         selectedPhaseEvalResult = phaseValNew * phasePdfNew;
-                    //         selectedTr = trCurr;
-                    //         // printf("weightSum:%f, sampleCount:%f, selectedPdfHat:%f, pHat:%f\n" ,weightSum, sampleCount, selectedPdfHat, pHat);
-                    //     }
-                    // }
-                    // // update throughput
-                    // // printf("%d\n", sampleCount == 0);
-                    // Float RISWeight = (weightSum / sampleCount) / selectedPdfHat;
-
-                    // // printf("RISWeight:%.6f, weightSum:%.6f, sampleCount:%.6f, selectedPdfHat:%.9f\n"
-                    // //         ,RISWeight, weightSum, (double)sampleCount, selectedPdfHat);
-
-                    // throughput *= selectedPhaseEvalResult * selectedTr * mRec.sigmaS * RISWeight
-                    //             / (estimateMultipleScatteringP);
-
-                    
-
-
-                   // ====================solution 3: sample another direction====================
-                //    Float phasePdfNew;
-                //    PhaseFunctionSamplingRecord pRecNew(mRec, -initialRay.d);
-                //    Float phaseVal = phase->sample(pRecNew, phasePdfNew, rRec.sampler);
-
-                //    ray = Ray(mRec.p, pRecNew.wo, initialRay.time);
-                //    ray.mint = 0.0f;
-
-                //    if (phaseVal == 0.0f) break;
-                //    scene->rayIntersect(ray, its);
-
-                //    if (!its.isValid()) break;
-
-                //    // sample distance
-                //    rRec.medium->sampleDistanceMultipleScattering(Ray(ray, 0.0f, its.t), mRec, rRec.sampler);
-
-                //    throughput *= phaseVal * mRec.sigmaS * mRec.transmittance / (mRec.pdfSuccess * estimateMultipleScatteringP);
                 }
-
-                // const Float estimateSurfaceP = 0.2f;
-                // auto insideMedium = rRec.medium->sampleDistanceMultipleScattering(Ray(ray, 0, its.t), mRec, rRec.sampler, estimateSurfaceP);
-                // // auto insideMedium = rRec.medium->sampleDistance(Ray(ray, 0, its.t), mRec, rRec.sampler);
-                // if (insideMedium) {
-                //     if (!its.isValid()) break;
-                //     throughput *= phaseVal * mRec.sigmaS * mRec.transmittance / mRec.pdfSuccess;
-                // }
-                // else {
-                //     if (!its.isValid()) {
-                //         if ((rRec.type & RadianceQueryRecord::EEmittedRadiance) && (!m_hideEmitters || scattered)) {
-                //             Spectrum value = throughput * scene->evalEnvironment(ray);
-                //             if (rRec.medium)
-                //                 value *= rRec.medium->evalTransmittance(ray, rRec.sampler);
-                //             Li += value;
-                //         }
-                //         break;
-                //     }
-                //     throughput *= phaseVal * mRec.transmittance / mRec.pdfFailure;
-                //     rRec.medium = its.getTargetMedium(ray.d);
-                // }
 
             } 
             else {
@@ -999,6 +776,6 @@ public:
     MTS_DECLARE_CLASS()
 };
 
-MTS_IMPLEMENT_CLASS_S(VolumetricPathTracerNNEE, false, MonteCarloIntegrator)
-MTS_EXPORT_PLUGIN(VolumetricPathTracerNNEE, "Volumetric path tracer with Next-Next Event Estimation (NNEE)");
+MTS_IMPLEMENT_CLASS_S(VolumetricPathTracerNNEETest, false, MonteCarloIntegrator)
+MTS_EXPORT_PLUGIN(VolumetricPathTracerNNEETest, "Volumetric path tracer with Next-Next Event Estimation (NNEE)");
 MTS_NAMESPACE_END
