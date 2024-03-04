@@ -23,10 +23,10 @@ MTS_NAMESPACE_BEGIN
 
 // const Point lightPosition = Point(-0.2, -0.8, 0.12);
 // const Spectrum lightIntensity = Spectrum(10.0);
-// const Point lightPosition = Point(20, 20, 20);
-// const Spectrum lightIntensity = Spectrum(1500.0);
-const Point lightPosition = Point(-0.4, -1.6, 0.24);
-const Spectrum lightIntensity = Spectrum(40.0);
+const Point lightPosition = Point(20, 20, 20);
+const Spectrum lightIntensity = Spectrum(1500.0);
+// const Point lightPosition = Point(-0.4, -1.6, 0.24);
+// const Spectrum lightIntensity = Spectrum(40.0);
 
 static StatsCounter avgPathLength("Volumetric path tracer", "Average path length", EAverage);
 
@@ -431,7 +431,7 @@ public:
                     // thp * phase1 * tr1 * phase2 * tr2 * Le * mis / (phase 1 pdf * distance 1 pdf)
                     // phase1 / phase 1 pdf == 1.0f
                     // di == tr2 * Le
-                    Spectrum contribution = throughput * mRec.sigmaS * 1.0f * mRecNext.transmittance * phase2 * di * misWeight / (mRecNext.pdfSuccess);
+                    Spectrum contribution = throughput * 1.0f * mRec.sigmaS * mRecNext.transmittance * phase2 * di * misWeight / (mRecNext.pdfSuccess);
                     Li += contribution;
 
                     if(contribution.isNaN()) 
@@ -485,7 +485,7 @@ public:
 
                     Float phase2 = mRec.getPhaseFunction()->eval(-scatterDir, normalize(lightPosition - item.scatteringPoint));
                     
-                    Li += phaseValue * tr * phase2 * item.di * misWeight / pdfs[2+si];                
+                    Li += throughput * phaseValue * mRec.sigmaS * tr * phase2 * item.di * misWeight / pdfs[2+si];                
                 }
 
                 // add current NNEE sample to list
@@ -505,9 +505,22 @@ public:
                 // printf("for end\n");
                 // reset intersection & record
                 // TODO: resample
+
+                auto bssrdf = [] (const Float albedo, const Float sigma_t,  const Float d) -> Float
+                {
+                    Float s = 1.85 - albedo + 7.0f * (albedo - 0.8) * (albedo - 0.8) * abs(albedo - 0.8);
+                    Float w = albedo * s;
+                    Float l = 1.0f / sigma_t;
+                    return w * (exp(- s * d / l) + exp(- s * d / (3.0f * l))) / (8.0f * M_PI * l * d);
+                };
+
                 mRec = mRecordArray[0];
                 Float phasePdf = mSolidAnglePdfArray[0];
                 Float phaseVal = mSolidAnglePdfArray[0];
+
+                // p_hat = bssrdf * L_e * G
+
+                
 
                 /* ==================================================================== */
                 /*                         Multiple scattering                          */
