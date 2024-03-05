@@ -24,10 +24,10 @@ MTS_NAMESPACE_BEGIN
 const float mediumPhaseG = 0.00016288994811475277;
 // const Point lightPosition = Point(-0.2, -0.8, 0.12);
 // const Spectrum lightIntensity = Spectrum(10.0);
-// const Point lightPosition = Point(20, 20, 20);
-// const Spectrum lightIntensity = Spectrum(1500.0);
-const Point lightPosition = Point(-0.4, -1.6, 0.24);
-const Spectrum lightIntensity = Spectrum(40.0);
+const Point lightPosition = Point(20, 20, 20);
+const Spectrum lightIntensity = Spectrum(1200.0);
+// const Point lightPosition = Point(-0.4, -1.6, 0.24);
+// const Spectrum lightIntensity = Spectrum(40.0);
 const bool enableRIS = false;
 
 void __debug_print_point (Point a, const char* name)
@@ -627,16 +627,16 @@ public:
                     bool select2=false;
 
                     // sample from proxy distributions
-                    // printf("RIS with %d proxy samples!\n",selectedScatteringPoint.size());
-                    // for (int i = 0; i<selectedScatteringPoint.size();i++)
-                    // {
-                    //     scatteringPointNNEE& item = *selectedScatteringPoint[i];
-                    //     if(item.selected || item.scatteringPoint == mRec.p) continue;
-                    //     Float weight = pHat(item, currentSamplePoint,ray.d) / ris_p(item, currentSamplePoint);
-                    //     weightSum += weight;
-                    //     sampleCount+=1.0f;
-                    //     if (rRec.sampler->next1D() < weight / weightSum) sampleIndex = i;
-                    // }
+                    printf("RIS with %d proxy samples!\n",selectedScatteringPoint.size());
+                    for (int i = 0; i<selectedScatteringPoint.size();i++)
+                    {
+                        scatteringPointNNEE& item = *selectedScatteringPoint[i];
+                        if(item.selected || item.scatteringPoint == mRec.p) continue;
+                        Float weight = pHat(item, currentSamplePoint,ray.d) / ris_p(item, currentSamplePoint);
+                        weightSum += weight;
+                        sampleCount+=1.0f;
+                        if (rRec.sampler->next1D() < weight / weightSum) sampleIndex = i;
+                    }
 
                     // sample from casual distributions
                     // printf("RIS with %d casual samples!\n",previousCasualScatter.size());
