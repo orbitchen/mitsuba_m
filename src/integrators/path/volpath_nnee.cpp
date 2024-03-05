@@ -29,6 +29,11 @@ const Spectrum lightIntensity = Spectrum(1500.0);
 // const Spectrum lightIntensity = Spectrum(40.0);
 const bool enableRIS = true;
 
+void __debug_print_point (Point a, const char* name)
+{
+    printf("%s: %f, %f, %f\n",name,a.x,a.y,a.z);
+};
+
 static StatsCounter avgPathLength("Volumetric path tracer", "Average path length", EAverage);
 
 /*!\plugin{volpath}{Extended volumetric path tracer}
@@ -115,6 +120,8 @@ public:
         Spectrum Li(0.0f);
         Float eta = 1.0f;
 
+        printf("begin li!\n");
+
         /* Perform the first ray intersection (or ignore if the
            intersection has already been provided). */
         rRec.rayIntersect(ray);
@@ -142,6 +149,8 @@ public:
             Point surfacePoint;
             Spectrum di; // direct illumination. i.e., Tr * Le * G for point light source
             Spectrum diTr; // Tr for direct illumination.
+
+            bool selected = false;
         };
 
         std::vector<scatteringPointNNEE> previousScatter;
@@ -211,6 +220,8 @@ public:
                 /*                         Phase function sampling (NNEE)                     */
                 /* ========================================================================== */
 
+                printf("new loop begin scattering point: %f\n",mRec.p.x);
+
                 // const g
                 const Float newPhaseFunctionG = 0.8;
 
@@ -249,9 +260,9 @@ public:
                     return INV_FOURPI * (1 - m_g*m_g) / (temp * std::sqrt(temp));
                 }; 
 
-                auto newPhasePdfBiVec = [newPhaseFunctionG] (Vector dir, Vector wo) -> Float
+                auto newPhasePdfBiVec = [] (Vector dir, Vector wo, Float g) -> Float
                 {
-                    Float m_g= newPhaseFunctionG;
+                    Float m_g= g;
                     Float temp = 1.0f + m_g*m_g + 2.0f * m_g * dot(dir, wo);
                     return INV_FOURPI * (1 - m_g*m_g) / (temp * std::sqrt(temp));
                 };
@@ -374,9 +385,11 @@ public:
                 auto reuseMisPdf = [newPhaseFunctionG, newPhasePdfBiVec, medium, scatteringJacobi] 
                 (const scatteringPointNNEE& sample, const Point& scatteringPoint, const Point& currentSamplePoint, const Ray& ray) -> Float
                 {
-                    Vector sampleDir = normalize(scatteringPoint - sample.sampleCentre);
+                    // Vector sampleDir = normalize(scatteringPoint - sample.sampleCentre);
                     Float sampleDistance = distance(scatteringPoint, sample.sampleCentre);
-                    Float phasePdf = newPhasePdfBiVec(sample.PhaseAxis, normalize(scatteringPoint - sample.sampleCentre));
+
+                    if (sampleDistance == 0.0f) return 0.0f;
+                    Float phasePdf = newPhasePdfBiVec(sample.PhaseAxis, normalize(scatteringPoint - sample.sampleCentre), sample.sampleG);
 
                     MediumSamplingRecord temp;
                     temp.t = sampleDistance;
@@ -388,10 +401,10 @@ public:
                 int NNEESampleCount = 2;
 
                 // select previous NNEE samples
-                std::vector<scatteringPointNNEE> selectedScatteringPoint;
+                std::vector<scatteringPointNNEE*> selectedScatteringPoint;
                 for(auto& item: previousScatter){
-                    if (medium->evalTransmittance(Ray(ray, 0.0f, distance(item.scatteringPoint, mRec.p))).max() > scatterTrMin) {
-                        selectedScatteringPoint.push_back(item);
+                    if (item.scatteringPoint != mRec.p && medium->evalTransmittance(Ray(ray, 0.0f, distance(item.scatteringPoint, mRec.p))).max() > scatterTrMin) {
+                        selectedScatteringPoint.push_back(&item);
                     }
 
                     if(selectedScatteringPoint.size() >= 6) break; // pick at most 6 samples
@@ -413,6 +426,12 @@ public:
 
                     mRecordArray.push_back(mRecNext);
 
+                    if(i==0)
+                        printf("phase/distance scattering point: %f\n", mRecNext.p.x);
+
+                    if(i==1)
+                        printf("proxy scattering point: %f\n", mRecNext.p.x);
+
                     // do intersection & calculate L_e
                     Spectrum diTr;
                     Spectrum di = calculateDi(mRecNext, mRec.medium, rRec.sampler,diTr);
@@ -429,7 +448,7 @@ public:
                     pdfs[1]*=mRec.medium->pdfDistanceMultipleScattering(mRecNext);
 
                     for(auto& item: selectedScatteringPoint){
-                        pdfs.push_back(reuseMisPdf(item, mRecNext.p, mRec.p, rayRecordArray[i]));
+                        pdfs.push_back(reuseMisPdf(*item, mRecNext.p, mRec.p, rayRecordArray[i]));
                     }
 
                     Float misWeight = multipleMisWeight(pdfs, pdfs[i]);
@@ -440,43 +459,23 @@ public:
                     // di == tr2 * Le
                     Spectrum contribution = throughput * 1.0f * mRec.sigmaS * mRecNext.transmittance * phase2 * di * misWeight / (mRecNext.pdfSuccess);
                     Li += contribution;
-
-                    if(contribution.isNaN()) 
-                    {
-                        // printf("find NaN!\n");
-                        // printf("pdfs: %f, %f, %f\n",pdfs[0],pdfs[1], mSolidAnglePdfArray[i] * mRecNext.pdfSuccess);
-                        // printf("record: %f, %f\n",mSolidAnglePdfArray[i], mRecNext.pdfSuccess);
-                        // if (i==0){
-                        //     printf("origin phase pdf / mSolidAnglePdfArray: %f, %f\n",mRec.getPhaseFunction()->eval(pRecordArray[i]), mSolidAnglePdfArray[i]);
-
-                        // }
-                        // if (i==1){
-                        //     printf("new phase pdf / mSolidAnglePdfArray : %f, %f\n", newPhasePdf(-towardsLight, pRecordArray[i]), mSolidAnglePdfArray[i]);
-                        // }
-
-                        // printf("max distance: %f\n", mItsArray[i].t);
-                        // printf("mRec position: %f, %f, %f\n", mRec.p.x, mRec.p.y, mRec.p.z);
-                        // printf("distance pdf / mis distance pdf : %f, %f\n", mRecNext.pdfSuccess, mRec.medium->pdfDistanceMultipleScattering(mRecNext));
-                    }
-                    
-                    // printf("all done\n");
                 }
 
                 // calculate reused (indefinite scattering point) contributions
                 int selectedScatteringPointCount = selectedScatteringPoint.size();
                 for(int si = 0; si < selectedScatteringPointCount; si++){
 
-                    auto& item = selectedScatteringPoint[si];
+                    auto& item = *selectedScatteringPoint[si];
+                    if ((item.scatteringPoint - mRec.p).length()==0.0f) printf("v.length == 0\n");
                     Vector scatterDir = normalize(item.scatteringPoint - mRec.p);
                     Float scatterDistance = distance(item.scatteringPoint, mRec.p);
-
                     std::vector<Float> pdfs;
 
                     Float phaseValue = mRec.getPhaseFunction()->eval(-ray.d, scatterDir);
                     Spectrum tr = medium->evalTransmittance(Ray(ray, 0.0f, scatterDistance));
 
                     pdfs.push_back(phaseValue);
-                    pdfs.push_back(newPhasePdfBiVec(-towardsLight, scatterDir));
+                    pdfs.push_back(newPhasePdfBiVec(-towardsLight, scatterDir, item.sampleG));
 
                     MediumSamplingRecord temp;
                     temp.t = scatterDistance;
@@ -485,7 +484,7 @@ public:
                     
 
                     for(auto& ss: selectedScatteringPoint){
-                        pdfs.push_back(reuseMisPdf(ss, item.scatteringPoint, mRec.p, item.ray));
+                        pdfs.push_back(reuseMisPdf(*ss, item.scatteringPoint, mRec.p, item.ray));
                     }
 
                     Float misWeight = multipleMisWeight(pdfs, pdfs[2+si]);
@@ -512,9 +511,11 @@ public:
 
                     if (enableRIS)
                     {
-                        selectedScatteringPoint.push_back(newScattering);
+                        previousScatter.push_back(newScattering);
+                        selectedScatteringPoint.push_back(&previousScatter[previousScatter.size()-1]);
                     }
 
+                    printf("add new NNEE point: %f with scattering centre: %f\n",newScattering.scatteringPoint.x, newScattering.sampleCentre.x);
                 }
 
                 // printf("for end\n");
@@ -523,10 +524,10 @@ public:
 
                 auto bssrdf = [] (const Float albedo, const Float sigma_t,  const Float d) -> Float
                 {
-                    Float s = 1.85 - albedo + 7.0f * (albedo - 0.8) * (albedo - 0.8) * abs(albedo - 0.8);
-                    Float w = albedo * s;
-                    Float l = 1.0f / sigma_t;
-                    return w * (exp(- s * d / l) + exp(- s * d / (3.0f * l))) / (8.0f * M_PI * l * d);
+                    // Float s = 1.85 - albedo + 7.0f * (albedo - 0.8) * (albedo - 0.8) * abs(albedo - 0.8);
+                    // Float w = albedo * s;
+                    // Float l = 1.0f / sigma_t;
+                    // return w * (exp(- s * d / l) + exp(- s * d / (3.0f * l))) / (8.0f * M_PI * l * d);
 
                     // printf("bssrdf: %f\n", w * (exp(- s * d / l) + exp(- s * d / (3.0f * l))) / (8.0f * M_PI * l * d));
                     return 1.0f;
@@ -534,22 +535,20 @@ public:
 
                 auto pHat = [bssrdf, medium] (const scatteringPointNNEE& sample) ->Float
                 {
-                    Spectrum albedo = medium->getSigmaS() / (medium->getSigmaT());
-                    Spectrum sigma_t = medium->getSigmaT();
-                    Float d = distance(sample.surfacePoint, sample.scatteringPoint);
-
-
-                    Spectrum retVal = bssrdf(albedo.getLuminance(), sigma_t.getLuminance(), d) * (sample.di / sample.diTr);
+                    // Spectrum albedo = medium->getSigmaS() / (medium->getSigmaT());
+                    // Spectrum sigma_t = medium->getSigmaT();
+                    // Float d = distance(sample.surfacePoint, sample.scatteringPoint);
+                    // Spectrum retVal = bssrdf(albedo.getLuminance(), sigma_t.getLuminance(), d) * (sample.di / sample.diTr);
 
                     // printf("pHat: %f\n", retVal.getLuminance());
-                    return retVal.getLuminance();
-                    // return 1.0f;
+                    // return retVal.getLuminance();
+                    return 1.0f;
                 };
 
                 auto ris_p = [scatteringJacobi] (const scatteringPointNNEE& sample, const Point& currentSamplePoint) -> Float
                 {
                     // printf("ris_p: %f\n", sample.scatteringPdf * scatteringJacobi(sample.sampleCentre, sample.scatteringPoint, currentSamplePoint));
-                    return sample.scatteringPdf * scatteringJacobi(sample.sampleCentre, sample.scatteringPoint, currentSamplePoint);
+                    // return sample.scatteringPdf * scatteringJacobi(sample.sampleCentre, sample.scatteringPoint, currentSamplePoint);
                     return 1.0f;
                 };
 
@@ -557,6 +556,7 @@ public:
                 {
                     // t p sigmaA sigmaS time medium transmittance
                     mRec.t = distance(sample.scatteringPoint, mRec.p);
+                    // printf("mRec: %f, [%f, %f, %f], [%f]\n", mRec.t, mRec.p.x, mRec.p.y, mRec.p.z, mRec.transmittance.getLuminance());
                     mRec.p = sample.scatteringPoint;
                     // sigmaA & sigmaS & time & medium remains unchanged
                     Ray pRay;
@@ -596,23 +596,28 @@ public:
 
                     for (int i = 0; i<selectedScatteringPoint.size();i++)
                     {
-                        scatteringPointNNEE& item = selectedScatteringPoint[i];
+                        scatteringPointNNEE& item = *selectedScatteringPoint[i];
+                        if(item.selected) continue;
                         Float weight = pHat(item) / ris_p(item, currentSamplePoint);
                         weightSum += weight;
                         sampleCount+=1.0f;
                         if (rRec.sampler->next1D() < weight / weightSum) sampleIndex = i;
                     }
 
-
                     // set mRec, phaseVal and RISWeight. phasePdf is not important.
-                    rayDir = normalize(selectedScatteringPoint[sampleIndex].scatteringPoint - mRec.p);
-                    RISWeight = weightSum / (pHat(selectedScatteringPoint[sampleIndex]) * sampleCount);
+                    selectedScatteringPoint[sampleIndex]->selected = true;
+                    rayDir = normalize(selectedScatteringPoint[sampleIndex]->scatteringPoint - mRec.p);
+                    RISWeight = weightSum / (pHat(*selectedScatteringPoint[sampleIndex]) * sampleCount);
                     // printf("RISWeight: %f\n", RISWeight);
                     phaseVal = mRec.getPhaseFunction()->eval(-ray.d, rayDir);
                     phasePdf = phaseVal;
 
+                    Point originalmRecp = mRec.p;
                     mRec = mRecordArray[0];
-                    fulfillMRec(selectedScatteringPoint[sampleIndex], mRec);
+                    mRec.p = originalmRecp;
+                    fulfillMRec(*selectedScatteringPoint[sampleIndex], mRec);
+
+                    printf("RIS choose next point: %f\n", mRec.p.x);
                 }
 
 
@@ -634,6 +639,7 @@ public:
                     // estimate ONLY surface term
                     // throughput *= (phase * transmittance) / (phasePdf * estimateSurfacePdf)
                     // direction is sampled according to phase function
+                    printf("leave medium\n");
                     its = mItsArray[0];
                     ray = Ray(mRec.p, pRecordArray[0].wo, ray.time);
                     Spectrum transmittance = rRec.medium->evalTransmittance(Ray(ray, 0, its.t), rRec.sampler);
@@ -657,7 +663,7 @@ public:
 
                 }
                 else {
-
+                    printf("keep scattering\n");
                     if (!its.isValid()) break; // no problem
 
                     if (!enableRIS)
@@ -672,7 +678,7 @@ public:
                     }
 
                 }
-                
+
             } 
             else {
                 // OUT_DEBUG("surface intersection");
