@@ -51,3 +51,7 @@ mitsuba.*.log
 
 # CLion
 .idea
+
+.vscode
+
+/build
