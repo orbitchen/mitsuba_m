@@ -23,7 +23,7 @@ MTS_NAMESPACE_BEGIN
 
 const bool enableRIS = true;
 
-static float mediumPhaseG = 0.00016288994811475277;
+static float mediumPhaseG = 0.0f;
 static Point lightPosition = Point(-0.4, -1.6, 0.24);
 static Spectrum lightIntensity = Spectrum(40.0);
 
@@ -177,7 +177,7 @@ public:
                 */
 
                 mediumPhaseG = rRec.medium->getPhaseFunction()->getMeanCosine();
-
+                
                 if (rRec.depth >= m_maxDepth && m_maxDepth != -1) // No more scattering events allowed
                     break;
 
@@ -326,7 +326,7 @@ public:
                     ray = initialRay;
 
                     pRecordArray.push_back(pRec);
-                    mItsArray.push_back(firstIts);
+                    mItsArray.push_back(itsNew);
                     mSolidAnglePdfArray.push_back(phasePdf);
                 }
 
@@ -354,7 +354,7 @@ public:
                     ray = initialRay;
 
                     pRecordArray.push_back(pRecNew);
-                    mItsArray.push_back(firstIts);
+                    mItsArray.push_back(itsNew);
                     mSolidAnglePdfArray.push_back(phaseVal);
                 }
 
@@ -376,7 +376,7 @@ public:
                 auto calculateDi = [&diItsArray, &scene] (const MediumSamplingRecord& mRec, const Medium* m, Sampler* sampler, Spectrum& LeDotG) -> Spectrum
                 {
                     // di includes transmittance
-                    int inter = 4;
+                    int inter = 12;
                     diItsArray.emplace_back(Intersection());
                     Spectrum tr = scene->evalTransmittance(mRec.p, false, lightPosition, false, 0.0f, m, inter, sampler, &diItsArray[diItsArray.size()-1]);
 
@@ -465,6 +465,7 @@ public:
                     // thp * phase1 * tr1 * phase2 * tr2 * Le * mis / (phase 1 pdf * distance 1 pdf)
                     // phase1 / phase 1 pdf == 1.0f
                     // di == tr2 * Le
+                    // Spectrum contribution = throughput * 1.0f * mRec.sigmaS * mRecNext.transmittance * phase2 * di * misWeight / (mRecNext.pdfSuccess);
                     Spectrum contribution = throughput * 1.0f * mRec.sigmaS * mRecNext.transmittance * phase2 * di * misWeight / (mRecNext.pdfSuccess);
                     Li += contribution;
                 }
@@ -499,7 +500,7 @@ public:
 
                     Float phase2 = mRec.getPhaseFunction()->eval(-scatterDir, normalize(lightPosition - item.scatteringPoint));
                     
-                    Li += throughput * phaseValue * mRec.sigmaS * tr * phase2 * item.di * misWeight / pdfs[2+si];                
+                    Li += throughput * phaseValue * mRec.sigmaS * tr * phase2 * item.di * misWeight / (pdfs[2+si]);                
                 }
 
                 // add current NNEE sample to list
@@ -615,7 +616,7 @@ public:
                 Vector rayDir;
 
                 // explicit surface/medium sampling
-                const Float estimateSurfaceP = sampleSurfacePdf(mRec, rRec, scene);
+                const Float estimateSurfaceP = sampleSurfacePdf(mRecordArray[0], rRec, scene);
                 Float estimateMultipleScatteringP = 1.0f - estimateSurfaceP;
                 bool estimateSurface = rRec.sampler->next1D() < estimateSurfaceP;
 
@@ -727,10 +728,11 @@ public:
                     // direction is sampled according to phase function
                     // printf("leave medium\n");
                     its = mItsArray[0];
-                    ray = Ray(mRec.p, pRecordArray[0].wo, ray.time);
+                    ray = Ray(its.p, pRecordArray[0].wo, ray.time);
+                    
                     Spectrum transmittance = rRec.medium->evalTransmittance(Ray(ray, 0, its.t), rRec.sampler);
-
-                    throughput *= phaseVal / estimateSurfaceP;
+                    
+                    throughput /= estimateSurfaceP;
                     
 
                     if (!its.isValid()) {
@@ -747,9 +749,10 @@ public:
 
                     rRec.medium = its.getTargetMedium(ray.d);
 
+                    scene->rayIntersect(ray, its);
+
                 }
                 else {
-                    // printf("keep scattering\n");
                     if (!its.isValid()) break; // no problem
 
                     if (!enableRIS)
@@ -767,14 +770,6 @@ public:
 
             } 
             else {
-                // OUT_DEBUG("surface intersection");
-                /* Sample
-                    tau(x, y) (Surface integral). This happens with probability mRec.pdfFailure
-                    Account for this and multiply by the proper per-color-channel transmittance.
-                */
-                // if (rRec.medium){
-                //     throughput *= mRec.transmittance / mRec.pdfFailure;
-                // }
 
                 if (!its.isValid()) {
                     /* If no intersection could be found, possibly return
@@ -893,6 +888,8 @@ public:
                         if (insideMedium) {
                             throughput *= mRec.sigmaS * mRec.transmittance / mRec.pdfSuccess;
                             enterMedium = true;
+                            ray = Ray(mRec.p, ray.d, ray.time);
+                            // scene->rayIntersect(ray, its);
                         }
                         else {
                             if (!its.isValid()) {
@@ -906,6 +903,8 @@ public:
                             }
                             throughput *= mRec.transmittance / mRec.pdfFailure;
                             rRec.medium = its.getTargetMedium(ray.d);
+                            ray = Ray(its.p, ray.d, ray.time);
+                            scene->rayIntersect(ray, its);
                         }
                     }
 
@@ -940,6 +939,8 @@ public:
                     if (insideMedium) {
                         throughput *= mRec.sigmaS * mRec.transmittance / mRec.pdfSuccess;
                         enterMedium = true;
+                        ray = Ray(mRec.p, ray.d, ray.time);
+                        // scene->rayIntersect(ray, its);
                     }
                     else {
                         if (!its.isValid()) {
@@ -953,6 +954,8 @@ public:
                         }
                         throughput *= mRec.transmittance / mRec.pdfFailure;
                         rRec.medium = its.getTargetMedium(ray.d);
+                        ray = Ray(its.p, ray.d, ray.time);
+                        scene->rayIntersect(ray, its);
                     }
                 }
             }
