@@ -334,6 +334,9 @@ public:
         // int channel = std::min((int) (sampler->next1D()
         //     * SPECTRUM_SAMPLES), SPECTRUM_SAMPLES-1);
         int channel = 0;
+        for(int i=0;i<SPECTRUM_SAMPLES;i++) {
+            if (m_sigmaT[i] < m_sigmaT[channel]) channel = i;
+        }
         Float samplingDensity = m_sigmaT[channel];
         
         Float rand2 = sampler->next1D() * (1.0f - exp(- distSurf * samplingDensity));
@@ -387,6 +390,9 @@ public:
 
     Float pdfDistanceMultipleScattering(MediumSamplingRecord &mRec) const {
         int channel = 0;
+        for(int i=0;i<SPECTRUM_SAMPLES;i++) {
+            if (m_sigmaT[i] < m_sigmaT[channel]) channel = i;
+        }
         return m_sigmaT[channel] * math::fastexp(-m_sigmaT[channel] * mRec.t);
     }
 

@@ -21,14 +21,11 @@
 
 MTS_NAMESPACE_BEGIN
 
-const float mediumPhaseG = 0.00016288994811475277;
-// const Point lightPosition = Point(-0.2, -0.8, 0.12);
-// const Spectrum lightIntensity = Spectrum(10.0);
-const Point lightPosition = Point(20, 20, 20);
-const Spectrum lightIntensity = Spectrum(1200.0);
-// const Point lightPosition = Point(-0.4, -1.6, 0.24);
-// const Spectrum lightIntensity = Spectrum(40.0);
-const bool enableRIS = false;
+const bool enableRIS = true;
+
+static float mediumPhaseG = 0.00016288994811475277;
+static Point lightPosition = Point(-0.4, -1.6, 0.24);
+static Spectrum lightIntensity = Spectrum(40.0);
 
 void __debug_print_point (Point a, const char* name)
 {
@@ -121,6 +118,13 @@ public:
         Spectrum Li(0.0f);
         Float eta = 1.0f;
 
+        {
+            auto tempEmitter = scene->getEmitters()[0].get();
+            const Transform &trafo = tempEmitter->getWorldTransform()->eval(0.0f);
+            lightPosition = trafo(Point(0,0,0));
+            lightIntensity = tempEmitter->getIntensity();
+        }
+
         // printf("begin li!\n");
 
         /* Perform the first ray intersection (or ignore if the
@@ -171,6 +175,8 @@ public:
                 /* Sample the integral
                 \int_x^y tau(x, x') [ \sigma_s \int_{S^2} \rho(\omega,\omega') L(x,\omega') d\omega' ] dx'
                 */
+
+                mediumPhaseG = rRec.medium->getPhaseFunction()->getMeanCosine();
 
                 if (rRec.depth >= m_maxDepth && m_maxDepth != -1) // No more scattering events allowed
                     break;
@@ -513,7 +519,7 @@ public:
 
                     if (enableRIS)
                     {
-                        previousScatter.push_back(newScattering);
+                        // previousScatter.push_back(newScattering);
                         selectedScatteringPoint.push_back(&previousScatter[previousScatter.size()-1]);
                     }
 
@@ -570,10 +576,13 @@ public:
                     // return 1.0f;
                 };
 
-                auto ris_p = [scatteringJacobi] (const scatteringPointNNEE& sample, const Point& currentSamplePoint) -> Float
+                auto ris_p = [scatteringJacobi] (const scatteringPointNNEE& sample, const Point& currentSamplePoint, bool requireJ = true) -> Float
                 {
                     // printf("ris_p: %f\n", sample.scatteringPdf * scatteringJacobi(sample.sampleCentre, sample.scatteringPoint, currentSamplePoint));
-                    return sample.scatteringPdf * scatteringJacobi(sample.sampleCentre, sample.scatteringPoint, currentSamplePoint);
+                    if (requireJ)
+                        return sample.scatteringPdf * scatteringJacobi(sample.sampleCentre, sample.scatteringPoint, currentSamplePoint);
+                    else
+                        return sample.scatteringPdf;
                     // return 1.0f;
                 };
 
@@ -620,23 +629,32 @@ public:
                     // printf("RIS begin!\n");
                     Point currentSamplePoint = mRec.p;
 
-                    int sampleIndex = 0;
+                    int sampleIndex = -1;
                     Float weightSum = 0.0f;
                     Float sampleCount = 0.0f;
 
-                    bool select2=false;
+                    bool select2=true;
 
                     // sample from proxy distributions
-                    printf("RIS with %d proxy samples!\n",selectedScatteringPoint.size());
-                    for (int i = 0; i<selectedScatteringPoint.size();i++)
-                    {
-                        scatteringPointNNEE& item = *selectedScatteringPoint[i];
-                        if(item.selected || item.scatteringPoint == mRec.p) continue;
-                        Float weight = pHat(item, currentSamplePoint,ray.d) / ris_p(item, currentSamplePoint);
-                        weightSum += weight;
-                        sampleCount+=1.0f;
-                        if (rRec.sampler->next1D() < weight / weightSum) sampleIndex = i;
-                    }
+                    // printf("RIS with %d proxy samples!\n",selectedScatteringPoint.size());
+
+                    // TODO: bug fix here. this implementation indroduces bias (or variance?)
+                    // for (int i = selectedScatteringPoint.size() - 1; i<selectedScatteringPoint.size();i++)
+                    // {
+                    //     scatteringPointNNEE& item = *selectedScatteringPoint[i];
+                    //     if(item.selected || item.scatteringPoint == mRec.p) continue;
+                    //     bool requireJ = (i != selectedScatteringPoint.size() - 1);
+                    //     Float weight = pHat(item, currentSamplePoint,ray.d) / ris_p(item, currentSamplePoint, requireJ);
+                    //     weightSum += weight;
+                    //     sampleCount+=1.0f;
+
+                    //     // if (weight > 200.0f) printf("weight: %f\n",weight);
+                    //     if (rRec.sampler->next1D() < weight / weightSum) 
+                    //     {
+                    //         select2 = false;
+                    //         sampleIndex = i;
+                    //     }
+                    // }
 
                     // sample from casual distributions
                     // printf("RIS with %d casual samples!\n",previousCasualScatter.size());
@@ -655,6 +673,8 @@ public:
                     }
 
                     // printf("select2: %d\n", select2);
+
+                    if (sampleIndex == -1) return Li;
 
                     // set mRec, phaseVal and RISWeight. phasePdf is not important.
                     if(!select2){

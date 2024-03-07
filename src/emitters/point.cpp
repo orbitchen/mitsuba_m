@@ -150,6 +150,8 @@ public:
         return dRec.measure == EDiscrete ? 1.0f : 0.0f;
     }
 
+    virtual Spectrum getIntensity() const override {return m_intensity;}
+
     AABB getAABB() const {
         return m_worldTransform->getTranslationBounds();
     }

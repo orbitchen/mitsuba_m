@@ -290,6 +290,9 @@ public:
      *
      * \sa EEmitterType
      */
+
+    virtual Spectrum getIntensity() const {return Spectrum(0.0f);}
+
     inline uint32_t getType() const { return m_type; }
 
     /// Return the local space to world space transformation
