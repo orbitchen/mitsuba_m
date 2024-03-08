@@ -574,7 +574,7 @@ public:
                     Float p = medium->getPhaseFunction()->eval(-rayDir, normalize(sample.scatteringPoint - curScatteringP));
                     Ray fakeRay; fakeRay.mint = 0.0f; fakeRay.maxt = distance(sample.scatteringPoint, curScatteringP);
                     Spectrum tr = medium->evalTransmittance(fakeRay);
-                    Spectrum retVal = (bssrdf(albedo.getLuminance(), sigma_t.getLuminance(), d))* (sample.LeDotG) * p * tr;
+                    Spectrum retVal = (bssrdf(albedo.getLuminance(), sigma_t.getLuminance(), d) + 1.0f)* (sample.LeDotG) * p * tr;
                     // printf("pHat: %f\n", retVal.getLuminance());
                     // printf("bssrdf: %f, di: %f, LeDotG: %f, p: %f, tr: %f\n",bssrdf(albedo.getLuminance(), sigma_t.getLuminance(), d),sample.di.getLuminance(), sample.LeDotG.getLuminance(), p, tr.getLuminance());
                     return retVal.getLuminance();
