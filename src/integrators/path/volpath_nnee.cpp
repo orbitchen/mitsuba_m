@@ -377,10 +377,10 @@ public:
                     return (currPdf * currPdf) / sum;
                 };
 
-                auto calculateDi = [&diItsArray, &scene] (const MediumSamplingRecord& mRec, const Medium* m, Sampler* sampler, Spectrum& LeDotG) -> Spectrum
+                auto calculateDi = [&diItsArray, &scene, &rRec, this] (const MediumSamplingRecord& mRec, const Medium* m, Sampler* sampler, Spectrum& LeDotG) -> Spectrum
                 {
                     // di includes transmittance
-                    int inter = 12;
+                    int inter = m_maxDepth;
                     diItsArray.emplace_back(Intersection());
                     Spectrum tr = scene->evalTransmittance(mRec.p, false, lightPosition, false, 0.0f, m, inter, sampler, &diItsArray[diItsArray.size()-1]);
 
@@ -504,7 +504,7 @@ public:
 
                     Float phase2 = mRec.getPhaseFunction()->eval(-scatterDir, normalize(lightPosition - item.scatteringPoint));
                     
-                    Li += throughput * phaseValue * mRec.sigmaS * tr * phase2 * item.di * misWeight / (pdfs[2+si]);                
+                    Li += throughput * phaseValue * mRec.sigmaS * tr * phase2 * item.di * misWeight / (item.scatteringPdf * scatteringJacobi(item.sampleCentre, item.scatteringPoint, mRec.p));                
                 }
 
                 // add current NNEE sample to list
@@ -574,7 +574,7 @@ public:
                     Float p = medium->getPhaseFunction()->eval(-rayDir, normalize(sample.scatteringPoint - curScatteringP));
                     Ray fakeRay; fakeRay.mint = 0.0f; fakeRay.maxt = distance(sample.scatteringPoint, curScatteringP);
                     Spectrum tr = medium->evalTransmittance(fakeRay);
-                    Spectrum retVal = (bssrdf(albedo.getLuminance(), sigma_t.getLuminance(), d) + 1.0f)* (sample.LeDotG) * p * tr;
+                    Spectrum retVal = (bssrdf(albedo.getLuminance(), sigma_t.getLuminance(), d))* (sample.LeDotG) * p * tr;
                     // printf("pHat: %f\n", retVal.getLuminance());
                     // printf("bssrdf: %f, di: %f, LeDotG: %f, p: %f, tr: %f\n",bssrdf(albedo.getLuminance(), sigma_t.getLuminance(), d),sample.di.getLuminance(), sample.LeDotG.getLuminance(), p, tr.getLuminance());
                     return retVal.getLuminance();
