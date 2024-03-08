@@ -239,7 +239,7 @@ public:
                 */
 
                 // return phase value & phase pdf (same value)
-                auto newPhaseSample = [newPhaseFunctionG] (Vector dir, PhaseFunctionSamplingRecord& pRec, Sampler* sampler) -> Float
+                auto newPhaseSample = [&newPhaseFunctionG] (Vector dir, PhaseFunctionSamplingRecord& pRec, Sampler* sampler) -> Float
                 {
                     Float m_g = newPhaseFunctionG;
 
@@ -313,8 +313,9 @@ public:
                     Spectrum value(0.0f);
                     Intersection firstIts;
                     Intersection itsNew;
-                    rayIntersectAndLookForEmitter(scene, rRec.sampler, rRec.medium,
-                        m_maxDepth - rRec.depth - 1, ray, itsNew, dRec, value, &firstIts);
+                    // rayIntersectAndLookForEmitter(scene, rRec.sampler, rRec.medium,
+                    //     m_maxDepth - rRec.depth - 1, ray, itsNew, dRec, value, &firstIts);
+                    scene->rayIntersect(ray,itsNew);
 
                     /* If a luminaire was hit, estimate the local illumination and
                     weight using the power heuristic */
@@ -350,8 +351,9 @@ public:
 
                     Spectrum value(0.0f);
                     Intersection firstIts;
-                    rayIntersectAndLookForEmitter(scene, rRec.sampler, rRec.medium,
-                        m_maxDepth - rRec.depth - 1, ray, itsNew, dRec, value, &firstIts);
+                    // rayIntersectAndLookForEmitter(scene, rRec.sampler, rRec.medium,
+                    //     m_maxDepth - rRec.depth - 1, ray, itsNew, dRec, value, &firstIts);
+                    scene->rayIntersect(ray,itsNew);
 
                     ray = initialRay;
 
@@ -457,9 +459,9 @@ public:
                     pdfs[0]*=mRec.medium->pdfDistanceMultipleScattering(mRecNext);
                     pdfs[1]*=mRec.medium->pdfDistanceMultipleScattering(mRecNext);
 
-                    // for(auto& item: selectedScatteringPoint){
-                    //     pdfs.push_back(reuseMisPdf(*item, mRecNext.p, mRec.p, rayRecordArray[i]));
-                    // }
+                    for(auto& item: selectedScatteringPoint){
+                        pdfs.push_back(reuseMisPdf(*item, mRecNext.p, mRec.p, rayRecordArray[i]));
+                    }
 
                     Float misWeight = multipleMisWeight(pdfs, pdfs[i]);
 
@@ -759,14 +761,14 @@ public:
                     {
                         ray = Ray(mRec.p, pRecordArray[0].wo, ray.time);
                         ray.mint = Epsilon;
-                        throughput *= phaseVal * mRec.sigmaS * mRec.transmittance / (phasePdf * mRec.pdfSuccess);
+                        throughput *= phaseVal * mRec.sigmaS * mRec.transmittance / (phasePdf * mRec.pdfSuccess * estimateMultipleScatteringP);
                         its = mItsArray[0];
                     }
                     else
                     {
                         ray = Ray(mRec.p, rayDir, ray.time);
                         ray.mint = Epsilon;
-                        throughput *= phaseVal * mRec.sigmaS * mRec.transmittance * RISWeight;
+                        throughput *= phaseVal * mRec.sigmaS * mRec.transmittance * RISWeight / estimateMultipleScatteringP;
                     }
 
                 }
