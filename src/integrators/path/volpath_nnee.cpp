@@ -306,6 +306,7 @@ public:
                     /* Trace a ray in this direction */
                     Ray initialRay = ray;
                     ray = Ray(mRec.p, pRec.wo, ray.time);
+                    ray.mint = Epsilon;
                     rayRecordArray.push_back(ray);
                     ray.mint = 0;
 
@@ -343,6 +344,7 @@ public:
 
                     Ray initialRay = ray;
                     ray = Ray(mRec.p, pRecNew.wo, ray.time);
+                    ray.mint = Epsilon;
                     rayRecordArray.push_back(ray);
                     ray.mint = 0;
 
@@ -449,15 +451,15 @@ public:
                     // mix samples using MIS
                     std::vector<Float> pdfs;
 
-                    pdfs.push_back(mRec.getPhaseFunction()->eval(pRecordArray[i]));
-                    pdfs.push_back(newPhasePdf(-towardsLight, pRecordArray[i]));
+                    pdfs.push_back(mSolidAnglePdfArray[0]);
+                    pdfs.push_back(mSolidAnglePdfArray[1]);
 
                     pdfs[0]*=mRec.medium->pdfDistanceMultipleScattering(mRecNext);
                     pdfs[1]*=mRec.medium->pdfDistanceMultipleScattering(mRecNext);
 
-                    for(auto& item: selectedScatteringPoint){
-                        pdfs.push_back(reuseMisPdf(*item, mRecNext.p, mRec.p, rayRecordArray[i]));
-                    }
+                    // for(auto& item: selectedScatteringPoint){
+                    //     pdfs.push_back(reuseMisPdf(*item, mRecNext.p, mRec.p, rayRecordArray[i]));
+                    // }
 
                     Float misWeight = multipleMisWeight(pdfs, pdfs[i]);
 
@@ -729,10 +731,9 @@ public:
                     // printf("leave medium\n");
                     its = mItsArray[0];
                     ray = Ray(its.p, pRecordArray[0].wo, ray.time);
-                    
+                    ray.mint = Epsilon;
                     Spectrum transmittance = rRec.medium->evalTransmittance(Ray(ray, 0, its.t), rRec.sampler);
-                    
-                    throughput /= estimateSurfaceP;
+                    throughput *= phaseVal / (phasePdf * estimateSurfaceP);
                     
 
                     if (!its.isValid()) {
@@ -746,10 +747,9 @@ public:
                     }
 
                     throughput *= transmittance;
-
                     rRec.medium = its.getTargetMedium(ray.d);
-
                     scene->rayIntersect(ray, its);
+                    rRec.depth++;
 
                 }
                 else {
@@ -758,11 +758,14 @@ public:
                     if (!enableRIS)
                     {
                         ray = Ray(mRec.p, pRecordArray[0].wo, ray.time);
+                        ray.mint = Epsilon;
                         throughput *= phaseVal * mRec.sigmaS * mRec.transmittance / (phasePdf * mRec.pdfSuccess);
+                        its = mItsArray[0];
                     }
                     else
                     {
                         ray = Ray(mRec.p, rayDir, ray.time);
+                        ray.mint = Epsilon;
                         throughput *= phaseVal * mRec.sigmaS * mRec.transmittance * RISWeight;
                     }
 
@@ -889,7 +892,9 @@ public:
                             throughput *= mRec.sigmaS * mRec.transmittance / mRec.pdfSuccess;
                             enterMedium = true;
                             ray = Ray(mRec.p, ray.d, ray.time);
+                            ray.mint = Epsilon;
                             // scene->rayIntersect(ray, its);
+                            continue;
                         }
                         else {
                             if (!its.isValid()) {
@@ -903,12 +908,13 @@ public:
                             }
                             throughput *= mRec.transmittance / mRec.pdfFailure;
                             rRec.medium = its.getTargetMedium(ray.d);
+                            // printf("rRec.medium == nullptr? %d\n",rRec.medium == nullptr);
                             ray = Ray(its.p, ray.d, ray.time);
+                            ray.mint = Epsilon;
                             scene->rayIntersect(ray, its);
+                            rRec.depth++;
                         }
                     }
-
-                    continue;
                 }
 
                 Spectrum value(0.0f);
@@ -940,7 +946,9 @@ public:
                         throughput *= mRec.sigmaS * mRec.transmittance / mRec.pdfSuccess;
                         enterMedium = true;
                         ray = Ray(mRec.p, ray.d, ray.time);
+                        ray.mint = Epsilon;
                         // scene->rayIntersect(ray, its);
+                        continue;
                     }
                     else {
                         if (!its.isValid()) {
@@ -954,8 +962,11 @@ public:
                         }
                         throughput *= mRec.transmittance / mRec.pdfFailure;
                         rRec.medium = its.getTargetMedium(ray.d);
+                        // printf("rRec.medium == nullptr? %d\n",rRec.medium == nullptr);
                         ray = Ray(its.p, ray.d, ray.time);
+                        ray.mint = Epsilon;
                         scene->rayIntersect(ray, its);
+                        rRec.depth++;
                     }
                 }
             }

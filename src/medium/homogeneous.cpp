@@ -333,16 +333,23 @@ public:
         Float distSurf = ray.maxt - ray.mint;
         // int channel = std::min((int) (sampler->next1D()
         //     * SPECTRUM_SAMPLES), SPECTRUM_SAMPLES-1);
-        int channel = 0;
-        for(int i=0;i<SPECTRUM_SAMPLES;i++) {
-            if (m_sigmaT[i] < m_sigmaT[channel]) channel = i;
-        }
-        Float samplingDensity = m_sigmaT[channel];
-        
-        Float rand2 = sampler->next1D() * (1.0f - exp(- distSurf * samplingDensity));
-        Float sampledDistance;
+        // int channel = 0;
+        // for(int i=0;i<SPECTRUM_SAMPLES;i++) {
+        //     if (m_sigmaT[i] < m_sigmaT[channel]) channel = i;
+        // }
+        // Float samplingDensity = m_samplingDensity;
 
-        sampledDistance = std::min(-math::fastlog(1 - rand2) / samplingDensity, distSurf);
+        int channel = std::min((int) (sampler->next1D()
+            * SPECTRUM_SAMPLES), SPECTRUM_SAMPLES-1);
+        Float samplingDensity = m_sigmaT[channel];
+        Float rand2 = sampler->next1D() * (1.0f - exp(- distSurf * samplingDensity));
+        Float sampledDistance = -math::fastlog(1-rand2) / samplingDensity;
+        // Float sampledDistance;
+
+        // sampledDistance = std::min(-math::fastlog(1 - rand2) / samplingDensity, distSurf);
+
+        if (-math::fastlog(1 - rand2) / samplingDensity > distSurf)
+            printf("distance: %f %f\n",-math::fastlog(1 - rand2) / samplingDensity, distSurf);
 
         mRec.t = sampledDistance + ray.mint;
         mRec.sigmaA = m_sigmaA;
@@ -353,24 +360,24 @@ public:
 
         mRec.pdfSuccess = 0.0f;
         mRec.pdfFailure = 0.0f;
-        // for(int i=0; i<SPECTRUM_SAMPLES;i++){
-        //     Float tmp = math::fastexp(-m_sigmaT[i] * sampledDistance);
-        //     Float tmp2 = math::fastexp(-m_sigmaT[i] * distSurf);
-        //     mRec.pdfSuccess += m_sigmaT[i] * tmp;
+        for(int i=0; i<SPECTRUM_SAMPLES;i++){
+            Float tmp = math::fastexp(-m_sigmaT[i] * sampledDistance);
+            Float tmp2 = math::fastexp(-m_sigmaT[i] * distSurf);
+            mRec.pdfSuccess += m_sigmaT[i] * tmp;
 
-        //     // for sampleSurfacePdf
-        //     mRec.pdfFailure += tmp2;
-        // }
+            // for sampleSurfacePdf
+            mRec.pdfFailure += tmp2;
+        }
 
-        // mRec.pdfFailure /= SPECTRUM_SAMPLES;
-        // mRec.pdfSuccess /= SPECTRUM_SAMPLES;
+        mRec.pdfFailure /= SPECTRUM_SAMPLES;
+        mRec.pdfSuccess /= SPECTRUM_SAMPLES;
 
-        Float tmp = math::fastexp(-m_sigmaT[channel] * sampledDistance);
-        Float tmp2 = math::fastexp(-m_sigmaT[channel] * distSurf);
-        mRec.pdfSuccess += m_sigmaT[channel] * tmp;
+        // Float tmp = math::fastexp(-m_sigmaT[channel] * sampledDistance);
+        // Float tmp2 = math::fastexp(-m_sigmaT[channel] * distSurf);
+        // mRec.pdfSuccess += m_sigmaT[channel] * tmp;
 
         // for sampleSurfacePdf
-        mRec.pdfFailure += tmp2;
+        // mRec.pdfFailure += tmp2;
 
         // correct pdfSuccess
         mRec.pdfSuccess /= (1.0f - mRec.pdfFailure);
@@ -389,11 +396,19 @@ public:
     }
 
     Float pdfDistanceMultipleScattering(MediumSamplingRecord &mRec) const {
-        int channel = 0;
-        for(int i=0;i<SPECTRUM_SAMPLES;i++) {
-            if (m_sigmaT[i] < m_sigmaT[channel]) channel = i;
+        // int channel = 0;
+        // for(int i=0;i<SPECTRUM_SAMPLES;i++) {
+        //     if (m_sigmaT[i] < m_sigmaT[channel]) channel = i;
+        // }
+        // return m_sigmaT[channel] * math::fastexp(-m_sigmaT[channel] * mRec.t);
+
+        Float sum = 0.0f;
+        for(int i=0; i<SPECTRUM_SAMPLES;i++){
+            Float tmp = math::fastexp(-m_sigmaT[i] * mRec.t);
+            sum += m_sigmaT[i] * tmp;
         }
-        return m_sigmaT[channel] * math::fastexp(-m_sigmaT[channel] * mRec.t);
+
+        return sum;
     }
 
     bool sampleDistanceAngular(const Ray &ray, MediumSamplingRecord &mRec, Sampler *sampler, const Point& lightPosition) const{
