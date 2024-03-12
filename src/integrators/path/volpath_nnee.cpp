@@ -21,7 +21,7 @@
 
 MTS_NAMESPACE_BEGIN
 
-const bool enableRIS = false;
+const bool enableRIS = true;
 
 static float mediumPhaseG = 0.0f;
 static Point lightPosition = Point(-0.4, -1.6, 0.24);
