@@ -21,7 +21,7 @@
 
 MTS_NAMESPACE_BEGIN
 
-const bool enableRIS = true;
+const bool enableRIS = false;
 
 static float mediumPhaseG = 0.0f;
 static Point lightPosition = Point(-0.4, -1.6, 0.24);
@@ -117,6 +117,7 @@ public:
         RayDifferential ray(r);
         Spectrum Li(0.0f);
         Float eta = 1.0f;
+        Spectrum debugLi(0.0f);
 
         {
             auto tempEmitter = scene->getEmitters()[0].get();
@@ -218,6 +219,7 @@ public:
                                 /* Weight using the power heuristic */
                                 const Float weight = miWeight(dRec.pdf, phasePdf);
                                 Li += throughput * value * phaseVal * weight;
+                                debugLi+= throughput * value * phaseVal * weight;
                             }
                         }
                     }
@@ -467,13 +469,15 @@ public:
 
                     Float misWeight = multipleMisWeight(pdfs, pdfs[i]);
 
-                    Float phase2 = mRec.getPhaseFunction()->eval(-pRecordArray[i].wo, normalize(lightPosition - mRecNext.p));
+                    Float phase2 = mRec.getPhaseFunction()->eval(normalize(lightPosition - mRecNext.p), pRecordArray[i].wo);
+
                     // thp * phase1 * tr1 * phase2 * tr2 * Le * mis / (phase 1 pdf * distance 1 pdf)
                     // phase1 / phase 1 pdf == 1.0f
                     // di == tr2 * Le
                     // Spectrum contribution = throughput * 1.0f * mRec.sigmaS * mRecNext.transmittance * phase2 * di * misWeight / (mRecNext.pdfSuccess);
                     Spectrum contribution = throughput * 1.0f * mRec.sigmaS * mRecNext.transmittance * phase2 * di * misWeight / (mRecNext.pdfSuccess);
                     nneeContribution += contribution;
+                    debugLi += contribution;
                 }
 
                 // calculate reused (indefinite scattering point) contributions
@@ -504,7 +508,7 @@ public:
 
                     Float misWeight = multipleMisWeight(pdfs, pdfs[2+si]);
 
-                    Float phase2 = mRec.getPhaseFunction()->eval(-scatterDir, normalize(lightPosition - item.scatteringPoint));
+                    Float phase2 = mRec.getPhaseFunction()->eval(normalize(lightPosition - item.scatteringPoint), scatterDir);
                     
                     nneeContribution += throughput * phaseValue * mRec.sigmaS * tr * phase2 * item.di * misWeight / (item.scatteringPdf * scatteringJacobi(item.sampleCentre, item.scatteringPoint, mRec.p));                
                 }
@@ -613,8 +617,6 @@ public:
                     // mRec.pdfSuccessRev = 1.0f;
                 };
 
-                Li += nneeContribution;
-
                 Float phasePdf = mSolidAnglePdfArray[0];
                 Float phaseVal = mSolidAnglePdfArray[0];
 
@@ -625,6 +627,8 @@ public:
                 const Float estimateSurfaceP = sampleSurfacePdf(mRecordArray[0], rRec, scene);
                 Float estimateMultipleScatteringP = 1.0f - estimateSurfaceP;
                 bool estimateSurface = rRec.sampler->next1D() < estimateSurfaceP;
+
+                Li += nneeContribution;
 
                 if (!enableRIS || estimateSurface)
                 {
@@ -992,6 +996,7 @@ public:
         avgPathLength.incrementBase();
         avgPathLength += rRec.depth;
         return Li;
+        // return debugLi;
     }
 
     /**
