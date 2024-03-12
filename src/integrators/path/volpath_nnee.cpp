@@ -422,6 +422,8 @@ public:
                     if(selectedScatteringPoint.size() >= 6) break; // pick at most 6 samples
                 }
 
+                Spectrum nneeContribution = Spectrum(0.0f);
+
                 // fulfill info & calculate current (2 scattering point) contributions
                 for (int i=0;i< NNEESampleCount; i++){
 
@@ -471,7 +473,7 @@ public:
                     // di == tr2 * Le
                     // Spectrum contribution = throughput * 1.0f * mRec.sigmaS * mRecNext.transmittance * phase2 * di * misWeight / (mRecNext.pdfSuccess);
                     Spectrum contribution = throughput * 1.0f * mRec.sigmaS * mRecNext.transmittance * phase2 * di * misWeight / (mRecNext.pdfSuccess);
-                    Li += contribution;
+                    nneeContribution += contribution;
                 }
 
                 // calculate reused (indefinite scattering point) contributions
@@ -504,7 +506,7 @@ public:
 
                     Float phase2 = mRec.getPhaseFunction()->eval(-scatterDir, normalize(lightPosition - item.scatteringPoint));
                     
-                    Li += throughput * phaseValue * mRec.sigmaS * tr * phase2 * item.di * misWeight / (item.scatteringPdf * scatteringJacobi(item.sampleCentre, item.scatteringPoint, mRec.p));                
+                    nneeContribution += throughput * phaseValue * mRec.sigmaS * tr * phase2 * item.di * misWeight / (item.scatteringPdf * scatteringJacobi(item.sampleCentre, item.scatteringPoint, mRec.p));                
                 }
 
                 // add current NNEE sample to list
@@ -611,7 +613,7 @@ public:
                     // mRec.pdfSuccessRev = 1.0f;
                 };
 
-
+                Li += nneeContribution;
 
                 Float phasePdf = mSolidAnglePdfArray[0];
                 Float phaseVal = mSolidAnglePdfArray[0];
